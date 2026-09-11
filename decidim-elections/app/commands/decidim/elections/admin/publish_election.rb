@@ -22,11 +22,17 @@ module Decidim
         def call
           return broadcast(:invalid) if election.published?
 
-          transaction do
+          with_events(with_transaction: true) do
             publish_election
           end
 
           broadcast(:ok, election)
+        end
+
+        protected
+
+        def event_arguments
+          { election: election, current_user: current_user }
         end
 
         private
