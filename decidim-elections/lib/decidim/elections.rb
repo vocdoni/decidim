@@ -28,10 +28,13 @@ module Decidim
     end
 
     # Public: Mutable list of every registered results_availability option.
-    # Seeded on first access from the Election model's frozen defaults
-    # constant, so the two stay in sync automatically.
+    # Seeded on first access with the three built-in values. Kept in sync
+    # with the Election model's frozen defaults constant by convention —
+    # not by direct reference, because this method can run at engine-init
+    # time (before Zeitwerk has autoloaded the model), and touching the
+    # constant there would raise NameError.
     def self.results_availability_options
-      @results_availability_options ||= Decidim::Elections::Election::RESULTS_AVAILABILITY_OPTIONS.dup
+      @results_availability_options ||= %w(real_time per_question after_end)
     end
   end
 end
