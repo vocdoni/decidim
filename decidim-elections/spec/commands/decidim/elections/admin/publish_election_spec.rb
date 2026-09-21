@@ -32,6 +32,38 @@ module Decidim
             expect(Decidim::ActionLog.last.version).to be_present
             expect(Decidim::ActionLog.last.version.event).to eq "update"
           end
+
+          describe "notifications (extension surface for external gems)" do
+            let(:event_arguments) { { election:, current_user: } }
+
+            it "publishes decidim.elections.admin.publish_election:before" do
+              expect(ActiveSupport::Notifications)
+                .to receive(:publish)
+                .with("decidim.elections.admin.publish_election:before", **event_arguments)
+                .ordered
+
+              expect(ActiveSupport::Notifications)
+                .to receive(:publish)
+                .with("decidim.elections.admin.publish_election:after", **event_arguments)
+                .ordered
+
+              subject
+            end
+
+            it "delivers the election to a subscriber via :after" do
+              published = nil
+              ActiveSupport::Notifications.subscribe("decidim.elections.admin.publish_election:after") do |*, payload|
+                published = payload[:election]
+              end
+
+              subject
+
+              expect(published).to eq(election)
+              expect(published.reload).to be_published
+            ensure
+              ActiveSupport::Notifications.unsubscribe("decidim.elections.admin.publish_election:after")
+            end
+          end
         end
 
         context "when the election is already published" do
