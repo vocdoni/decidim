@@ -12,7 +12,7 @@ module Decidim
         def call
           return broadcast(:invalid) unless action.in?([:enable_voting, :publish_results])
 
-          transaction do
+          with_events(with_transaction: true) do
             update_status
             question.save!
           end
@@ -21,6 +21,12 @@ module Decidim
         rescue StandardError => e
           Rails.logger.error "#{e.class.name}: #{e.message}"
           broadcast(:invalid)
+        end
+
+        protected
+
+        def event_arguments
+          { question: question, action: action }
         end
 
         private
