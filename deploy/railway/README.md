@@ -35,12 +35,8 @@ analysis, exports), so a volume on `web` would not work. The bucket survives
 redeploys and is shared by both services. It is private: files are served
 through presigned URLs and uploaded directly from the browser, so
 `config/initializers/storage_csp.rb` adds the bucket host to Decidim's CSP, and
-the bucket needs a CORS rule for browser uploads (run once, and again if
-`RAILS_HOSTS` changes):
-
-```bash
-railway ssh --service web -- bin/rails storage:cors
-```
+the release step sets the bucket's CORS rule for browser uploads from
+`RAILS_HOSTS` (`bin/rails storage:cors`, see `lib/tasks/storage.rake`).
 
 ## Variables
 

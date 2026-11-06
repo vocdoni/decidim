@@ -6,6 +6,12 @@ cd "$(dirname "$0")/.."
 
 bin/rails db:migrate
 
+# Browsers upload straight to the bucket; keep its CORS rule in step with
+# RAILS_HOSTS. Not fatal: a storage hiccup must not block a deploy.
+if [ "${STORAGE_PROVIDER:-local}" = "s3" ]; then
+  bin/rails storage:cors || echo "WARNING: storage:cors failed; browser uploads may be blocked" >&2
+fi
+
 # First boot only: set BOOTSTRAP_JSON on `web` for one deploy, then delete it.
 # See script/bootstrap_organization.rb.
 if [ -n "${BOOTSTRAP_JSON:-}" ]; then
