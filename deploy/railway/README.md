@@ -15,7 +15,7 @@ Railway project `decidim-vocdoni` (workspace Vocdoni, region europe-west4):
 
 | Service    | What                                   | Config |
 |------------|----------------------------------------|--------|
-| `web`      | Puma; release step `bin/rails db:migrate` (pre-deploy); healthcheck `/up`; custom domain `decidim.vocdoni.dev` | `Dockerfile`, `.railway/railway.ts` |
+| `web`      | Puma; release step `bin/release` (pre-deploy: `db:migrate`); healthcheck `/up`; custom domain `decidim.vocdoni.dev` | `Dockerfile`, `.railway/railway.ts` |
 | `worker`   | Sidekiq, queues in `config/sidekiq.yml` (`vocdoni` plus Decidim's) | same image, `bundle exec sidekiq -C config/sidekiq.yml` |
 | `Postgres` | Railway Postgres, 50 GB volume          | |
 | `Redis`    | Railway Redis (Sidekiq, Action Cable)   | |
@@ -88,18 +88,19 @@ railway up --service worker --detach
 Each upload builds the Dockerfile on Railway: gems from `Gemfile.lock`, the
 Vocdoni booth adapter (`public/vocdoni/booth-adapter.js`) rebuilt from the
 pinned module source, Decidim's npm packages copied from the pinned Decidim
-checkout, then `assets:precompile` (Shakapacker). `web` runs `db:migrate` before
-it takes traffic; `worker` has no release step.
+checkout, then `assets:precompile` (Shakapacker). `web` runs `bin/release`
+(`db:migrate`) before it takes traffic; `worker` has no release step.
 
 ## First boot
 
 `script/bootstrap_organization.rb` creates the system admin, the organization
-(host `decidim.vocdoni.dev`, no seed data) and its admin, idempotently. It reads
-a JSON object from STDIN so passwords stay off the command line:
-
-```bash
-railway ssh --service web -- bin/rails runner script/bootstrap_organization.rb < bootstrap.json
-```
+(host `decidim.vocdoni.dev`, no seed data) and its admin, idempotently. The
+release step (`bin/release`) runs it when `BOOTSTRAP_JSON` is set on `web`:
+set the variable, deploy once, delete the variable. Pass bcrypt digests
+(`*_password_digest`) rather than passwords, so the plaintext never leaves the
+operator's machine; the script header lists the keys. With SSH access it also
+reads the JSON from STDIN:
+`railway ssh --service web -- bin/rails runner script/bootstrap_organization.rb`.
 
 The credentials are kept outside the repository, in
 `~/.config/decidim-prod/creds.json` (mode 600) on the operator's machine.

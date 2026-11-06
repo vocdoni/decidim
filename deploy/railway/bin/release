@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Release step for the `web` service (Railway pre-deploy command): runs before
+# the new deployment takes traffic.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+bin/rails db:migrate
+
+# First boot only: set BOOTSTRAP_JSON on `web` for one deploy, then delete it.
+# See script/bootstrap_organization.rb.
+if [ -n "${BOOTSTRAP_JSON:-}" ]; then
+  bin/rails runner script/bootstrap_organization.rb </dev/null
+fi

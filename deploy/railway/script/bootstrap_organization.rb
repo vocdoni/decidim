@@ -1,23 +1,40 @@
 # frozen_string_literal: true
 
 # One-off: creates the system admin, the organization and its admin, without
-# seed data. Idempotent; reads a JSON object from STDIN so passwords never
-# appear in a command line:
+# seed data. Idempotent. Input is a JSON object, read from STDIN or, when that
+# is empty, from the BOOTSTRAP_JSON variable:
 #
-#   railway ssh --service web -- bin/rails runner script/bootstrap_organization.rb < creds.json
+#   bin/rails runner script/bootstrap_organization.rb < bootstrap.json
 #
 # Keys: host, organization_name, organization_short_name, reference_prefix,
 # available_locales (array), default_locale, system_admin_email,
-# system_admin_password, org_admin_name, org_admin_email, org_admin_password.
+# org_admin_name, org_admin_email, and for each admin either `*_password` or
+# `*_password_digest` (a bcrypt hash, so the plaintext never has to leave the
+# operator's machine): system_admin_password[_digest],
+# org_admin_password[_digest].
 
-input = JSON.parse($stdin.read)
+raw = $stdin.tty? ? "" : $stdin.read.to_s
+raw = ENV.fetch("BOOTSTRAP_JSON", "") if raw.strip.empty?
+abort "no input: pipe JSON on STDIN or set BOOTSTRAP_JSON" if raw.strip.empty?
+input = JSON.parse(raw)
 fetch = ->(key) { input.fetch(key) { abort "missing key: #{key}" } }
+
+# Saves `record` with its password from the input: the plaintext goes through
+# the model's validations; a digest is written after saving with a throwaway
+# password, because Devise requires a password on create.
+set_password = lambda do |record, prefix, &before_save|
+  digest = input["#{prefix}_password_digest"]
+  password = digest ? "#{SecureRandom.base64(36)}aA1!" : fetch.call("#{prefix}_password")
+  record.password = password
+  record.password_confirmation = password
+  before_save&.call
+  record.save!
+  record.update_columns(encrypted_password: digest) if digest # rubocop:disable Rails/SkipsModelValidations
+end
 
 system_admin = Decidim::System::Admin.find_or_initialize_by(email: fetch.call("system_admin_email"))
 if system_admin.new_record?
-  system_admin.password = fetch.call("system_admin_password")
-  system_admin.password_confirmation = system_admin.password
-  system_admin.save!
+  set_password.call(system_admin, "system_admin")
   puts "system admin created"
 else
   puts "system admin already exists"
@@ -56,17 +73,16 @@ end
 # CreateOrganization invites the admin by email. Give the account its password
 # and accept the invitation here, so it works before SMTP is configured.
 admin = Decidim::User.find_by!(organization:, email: fetch.call("org_admin_email"))
-if admin.encrypted_password.present? && admin.invitation_accepted?
+if admin.invitation_accepted?
   puts "organization admin already set up"
 else
-  admin.password = fetch.call("org_admin_password")
-  admin.password_confirmation = admin.password
-  admin.password_updated_at = Time.current
-  admin.tos_agreement = true
-  admin.accepted_tos_version = organization.tos_version
-  admin.admin = true
-  admin.skip_confirmation! unless admin.confirmed?
-  admin.accept_invitation!
-  admin.save!
+  set_password.call(admin, "org_admin") do
+    admin.password_updated_at = Time.current
+    admin.tos_agreement = true
+    admin.accepted_tos_version = organization.tos_version
+    admin.admin = true
+    admin.skip_confirmation! unless admin.confirmed?
+    admin.accept_invitation
+  end
   puts "organization admin set up"
 end

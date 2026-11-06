@@ -25,7 +25,7 @@ export default defineRailway(() => {
     build: { buildEnvironment: "V3", builder: "DOCKERFILE", dockerfilePath: "Dockerfile" },
     deploy: {
       startCommand: "bundle exec puma -C config/puma.rb",
-      preDeployCommand: ["bin/rails db:migrate"],
+      preDeployCommand: ["bin/release"],
       healthcheckPath: "/up",
       healthcheckTimeout: 300,
       restartPolicyType: "ON_FAILURE",
