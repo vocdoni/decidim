@@ -51,7 +51,7 @@ shared_examples "an authenticated vote controller" do
       end
 
       it "redirects to the question path" do
-        expect(controller).to receive(:redirect_to).with(action: :show, id: question)
+        expect(controller).to receive(:redirect_to).with({ action: :show, id: question })
         get(:new, params:)
 
         expect(controller.send(:session_authenticated?)).to be true
@@ -76,7 +76,7 @@ shared_examples "an authenticated vote controller" do
       end
 
       it "creates the session credentials and redirects to form again" do
-        expect(controller).to receive(:redirect_to).with(action: :show, id: question)
+        expect(controller).to receive(:redirect_to).with({ action: :show, id: question })
         post(:create, params:)
 
         expect(session[:session_attributes]).to be_present
@@ -89,7 +89,7 @@ end
 
 shared_examples "a redirect to the waiting room" do |action|
   it "redirects to the waiting page if waiting for next question" do
-    allow(controller).to receive(:redirect_to).with(action: :show, id: question)
+    allow(controller).to receive(:redirect_to).with({ action: :show, id: question })
     allow(controller).to receive(:waiting_for_next_question?).and_return(true)
     election.questions.update(voting_enabled_at: nil)
 
@@ -98,7 +98,7 @@ shared_examples "a redirect to the waiting room" do |action|
   end
 
   it "does not redirect if not waiting for next question" do
-    allow(controller).to receive(:redirect_to).with(action: :show, id: question)
+    allow(controller).to receive(:redirect_to).with({ action: :show, id: question })
 
     do_action(action)
     expect(response).to render_template(action) unless action == :update
