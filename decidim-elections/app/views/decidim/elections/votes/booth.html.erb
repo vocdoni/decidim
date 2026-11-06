@@ -1,0 +1,112 @@
+<%#
+  Client-side booth: every question, the confirm step and the receipt on one
+  page. The form has no action; the voting backend's JavaScript adapter casts
+  the ballot from the browser.
+%>
+<div class="vote-booth" data-voting-booth
+     data-voting-backend="<%= voting_backend.client_adapter %>"
+     data-config="<%= @booth_config.to_json %>"
+     data-i18n="<%= {
+       next: t("next", scope: "decidim.elections.votes.question"),
+       max_choices_alert: t("max_choices_alert", scope: "decidim.elections.votes.question"),
+       not_answered: t("not_answered", scope: "decidim.elections.votes.confirm"),
+       casting: t("decidim.elections.votes.booth.casting", default: "Casting your vote…"),
+       backend_missing: t("decidim.elections.votes.booth.backend_missing", default: "The voting booth could not start. Please reload the page."),
+       cannot_vote: t("decidim.elections.votes.booth.cannot_vote", default: "You cannot vote in this election.")
+     }.to_json %>">
+
+  <div class="text-lg font-semibold" role="status" aria-live="polite" data-booth-status></div>
+
+  <section data-booth-step="loading">
+    <p><%= t("decidim.elections.votes.booth.loading", default: "Preparing your ballot…") %></p>
+  </section>
+
+  <section data-booth-step="error" hidden>
+    <div class="callout alert" role="alert" data-booth-error-message></div>
+    <%= link_to t("exit_button", scope: "decidim.elections.votes.receipt"), exit_path, class: "button button__lg button__transparent-secondary mt-8" %>
+  </section>
+
+  <% if voting_backend.pre_ballot_partial.present? %>
+    <section data-booth-step="pre-ballot" hidden>
+      <%= render partial: voting_backend.pre_ballot_partial, locals: { election:, booth_config: @booth_config } %>
+    </section>
+  <% end %>
+
+  <form data-booth-form novalidate>
+    <% questions.each_with_index do |booth_question, index| %>
+      <section data-booth-step="question" data-booth-question
+               data-question-id="<%= booth_question.id %>"
+               data-question-title="<%= translated_attribute(booth_question.body) %>"
+               hidden>
+        <%= question_title(booth_question, :h1, class: "vote_booth-question_title", tabindex: "-1") %>
+        <div class="editor-content">
+          <%= render_question_description(booth_question) %>
+        </div>
+
+        <div class="question__response-options mt-4 flex flex-col gap-4 response" data-max-choices="<%= booth_question.max_choices if booth_question.max_choices.presence %>">
+          <% booth_question.response_options.each do |option| %>
+            <label class="rounded-lg border border-gray p-4 js-check-box-collection" data-option-title="<%= translated_attribute(option.body) %>">
+              <%= render "decidim/elections/votes/responses/#{booth_question.question_type}", option: %>
+            </label>
+          <% end %>
+
+          <% if booth_question.max_choices.presence %>
+            <small class="form-error max-choices-alert" style="display:none;"><%= t("max_choices_alert", scope: "decidim.elections.votes.question") %></small>
+          <% end %>
+        </div>
+
+        <div class="vote-navigation flex justify-between mt-8">
+          <% if index.positive? %>
+            <button type="button" class="button button__lg button__secondary" data-booth-back>
+              <%= icon "arrow-left-line", class: "fill-current" %>
+              <%= t("back", scope: "decidim.elections.votes.question") %>
+            </button>
+          <% end %>
+
+          <div class="ml-auto">
+            <button type="button" class="button button__lg button__secondary" data-booth-next>
+              <%= t("next", scope: "decidim.elections.votes.question") %>
+              <%= icon "arrow-right-line", class: "fill-current" %>
+            </button>
+          </div>
+        </div>
+      </section>
+    <% end %>
+  </form>
+
+  <section data-booth-step="confirm" hidden>
+    <h3 class="h3" tabindex="-1"><%= t("title", scope: "decidim.elections.votes.confirm") %></h3>
+    <div class="selected_responses space-y-6 mt-8" data-booth-confirm-list></div>
+    <div class="vote-navigation flex justify-between mt-8">
+      <button type="button" class="button button__lg button__transparent-secondary" data-booth-edit>
+        <%= icon "edit-line", class: "fill-current mr-2" %>
+        <%= t("edit_vote", scope: "decidim.elections.votes.confirm") %>
+      </button>
+      <button type="button" class="button button__lg button__secondary" data-booth-cast>
+        <%= icon "mail-send-line", class: "fill-current" %>
+        <%= t("cast_vote", scope: "decidim.elections.votes.confirm") %>
+      </button>
+    </div>
+  </section>
+
+  <section data-booth-step="receipt" hidden>
+    <div class="vote-submitted">
+      <div>
+        <div class="text-center text-[10rem]"><%= icon "check-line", class: "inline-block fill-success" %></div>
+        <h2 class="h2 text-center mb-6" tabindex="-1"><%= t("title", scope: "decidim.elections.votes.receipt") %></h2>
+        <% if voting_backend.vote_overwrite %>
+          <p class="text-center"><%= t("description", scope: "decidim.elections.votes.receipt") %></p>
+        <% end %>
+      </div>
+      <ul class="space-y-4 mt-8" data-booth-receipts></ul>
+      <% if voting_backend.receipt_partial.present? %>
+        <%= render partial: voting_backend.receipt_partial, locals: { election:, booth_config: @booth_config } %>
+      <% end %>
+      <%= link_to t("exit_button", scope: "decidim.elections.votes.receipt"), exit_path, class: "button button__secondary button__lg w-full mt-12" %>
+    </div>
+  </section>
+</div>
+
+<% if voting_backend.client_script.present? %>
+  <script src="<%= voting_backend.client_script %>" defer></script>
+<% end %>
