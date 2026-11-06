@@ -1,0 +1,10 @@
+.git
+.bundle
+.env*
+config/*.key
+log/*
+tmp/*
+storage/*
+node_modules
+packages
+public/decidim-packs

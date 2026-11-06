@@ -1,0 +1,32 @@
+# frozen_string_literal: true
+
+source "https://rubygems.org"
+
+ruby RUBY_VERSION
+
+# Decidim and the Vocdoni module both come from git, pinned by branch. To move
+# either one, change the ref below and run `bundle lock --update <gem>` (see
+# README.md, "Bumping Decidim or the module").
+DECIDIM_REPO = "https://github.com/vocdoni/decidim.git"
+DECIDIM_REF = "demo/integrated-booth"
+VOCDONI_REPO = "https://github.com/vocdoni/decidim-secure_elections.git"
+VOCDONI_REF = "demo/integrated-booth"
+
+git DECIDIM_REPO, branch: DECIDIM_REF do
+  gem "decidim"
+  # Not part of the `decidim` meta-gem; the Vocdoni module extends it.
+  gem "decidim-elections"
+end
+
+gem "decidim-elections-vocdoni", git: VOCDONI_REPO, branch: VOCDONI_REF
+
+# Decidim's seed classes (e.g. Decidim::Comments::Seed) require faker and are
+# eager-loaded in production, so it is needed even though nothing is seeded.
+gem "faker", "~> 3.2"
+
+gem "bootsnap", "~> 1.26"
+gem "puma", ">= 6.3.1"
+gem "sidekiq", "~> 8.0"
+
+# Active Storage backend (Railway bucket, S3-compatible).
+gem "aws-sdk-s3", require: false
