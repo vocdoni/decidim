@@ -328,6 +328,24 @@ es:
           edit_vote: Edita tu voto
           exit_button: Salir de la cabina de votación
           title: Tu voto se ha emitido correctamente
+        booth:
+          already_recorded:
+            body: "Solo se te están haciendo las preguntas restantes. Los recibos de los votos ya registrados aparecerán al final."
+            title: Parte de tu voto ya está registrada
+          backend_missing: La cabina de votación no se pudo iniciar. Por favor, recarga la página.
+          cannot_vote: No puedes votar en estas elecciones.
+          casting: "Emitiendo tu voto…"
+          loading: "Preparando tu papeleta…"
+          submit:
+            done: Registrado
+            failed: No registrado
+            recheck: Comprobar si se ha registrado mi voto
+            rechecking: "Consultando la red de votación…"
+            retry: Volver a enviar las preguntas fallidas
+            summary_failed: Algunos de tus votos no se pudieron emitir. No se ha registrado nada, por lo que puedes volver a intentarlo de forma segura.
+            summary_unconfirmed: "Hemos perdido el contacto mientras enviábamos algunos de tus votos. Es posible que se hayan registrado; comprúebalo antes de volver a intentarlo para no enviarlos dos veces."
+            title: Emitiendo tu voto
+            unconfirmed: No confirmado
     metadata:
       progress:
         published_results: 'Resultados publicados: %{end_date}'
