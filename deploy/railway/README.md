@@ -17,7 +17,8 @@ Railway project `decidim-vocdoni` (workspace Vocdoni, region europe-west4):
 |------------|----------------------------------------|--------|
 | `web`      | Puma; release step `bin/release` (pre-deploy: `db:migrate`); healthcheck `/up`; custom domain `decidim.vocdoni.dev` | `Dockerfile`, `.railway/railway.ts` |
 | `worker`   | Sidekiq, queues in `config/sidekiq.yml` (`vocdoni` plus Decidim's) | same image, `bundle exec sidekiq -C config/sidekiq.yml` |
-| `Postgres` | Railway Postgres, 50 GB volume          | |
+| `cron-15min`, `cron-daily`, `cron-weekly` | Decidim's scheduled rake tasks, one run per trigger (see [Scheduled tasks](#scheduled-tasks)) | same image, start command and cron schedule per service |
+| `Postgres` | Railway Postgres, 50 GB volume, with backups (see [Backups](#backups)) | |
 | `Redis`    | Railway Redis (Sidekiq, Action Cable)   | |
 | `uploads`  | Railway bucket (S3-compatible, private) | Active Storage `s3` service |
 
@@ -38,9 +39,31 @@ through presigned URLs and uploaded directly from the browser, so
 the release step sets the bucket's CORS rule for browser uploads from
 `RAILS_HOSTS` (`bin/rails storage:cors`, see `lib/tasks/storage.rake`).
 
+### Scheduled tasks
+
+Railway cron services run the image's start command on a schedule (UTC) and
+exit; `restartPolicyType` is `NEVER`, so a failed run waits for the next
+trigger. They replace the system crontab a Decidim host would have.
+
+| Service | Schedule | Start command |
+|---------|----------|---------------|
+| `cron-15min` | `*/15 * * * *` | `bundle exec rails decidim_participatory_processes:change_active_step` |
+| `cron-daily` | `5 0 * * *` | `bundle exec rails decidim:delete_download_your_data_files decidim:open_data:export decidim_meetings:clean_registration_forms decidim:reminders:all decidim:mailers:notifications_digest_daily decidim:participants:delete_inactive_participants` |
+| `cron-weekly` | `5 0 * * 6` | `bundle exec rails decidim:mailers:notifications_digest_weekly` |
+
+They need the same variables as `worker`: they read the database, enqueue jobs
+in Redis and write exports to the bucket.
+
+### Backups
+
+Railway backups on the `Postgres` volume: daily, kept 6 days, and weekly, kept
+27 days. Restores are done from the `Postgres` service's Backups tab in the
+Railway dashboard.
+
 ## Variables
 
-Set on both `web` and `worker` (secret values never live in this repository):
+Set on `web`, `worker` and the cron services (secret values never live in this
+repository):
 
 | Name | Value |
 |------|-------|
@@ -56,16 +79,13 @@ Set on both `web` and `worker` (secret values never live in this repository):
 | `RAILS_MAX_THREADS` | `5` |
 | `WEB_CONCURRENCY` | `web` only: Puma worker processes |
 | `SIDEKIQ_CONCURRENCY` | `worker` only |
+| `VOCDONI_API_URL`, `VOCDONI_API_KEY`, `VOCDONI_ORG_ADDRESS`, `VOCDONI_EXPLORER_URL` | the Vocdoni SaaS environment, the integrator API key and the managed organization the instance publishes to (optional `VOCDONI_*_TIMEOUT`). The app boots and serves without them; only the elections Security tab and publishing need them. Check with `railway ssh --service web -- bin/rails decidim_elections_vocdoni:doctor` |
 
 Not set yet:
 
 - **SMTP**: `SMTP_ADDRESS`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`,
   `SMTP_DOMAIN` (plus optional `SMTP_AUTHENTICATION`, `SMTP_STARTTLS_AUTO`).
   While `SMTP_ADDRESS` is unset, mail is discarded (`delivery_method = :test`).
-- **Vocdoni**: `VOCDONI_API_URL`, `VOCDONI_API_KEY`, `VOCDONI_ORG_ADDRESS`
-  (optional `VOCDONI_EXPLORER_URL`, `VOCDONI_*_TIMEOUT`). The app boots and
-  serves without them; only the elections Security tab and publishing need them.
-  Check with `railway ssh --service web -- bin/rails decidim_elections_vocdoni:doctor`.
 
 SSL: Railway terminates TLS. `config.assume_ssl` is on, Decidim turns on
 `force_ssl` in production, and `/up` is exempt from the HTTPS redirect and from
@@ -120,9 +140,3 @@ cp -r "$(bundle info --path decidim)/packages" . && npm install && rm -rf packag
 Commit `Gemfile.lock`, `db/migrate/` and `package-lock.json`, then deploy. The
 build fails on purpose (`npm ci`) if Decidim's packages changed and the npm
 lockfile was not refreshed.
-
-## Not covered yet
-
-- Decidim's periodic tasks (reminders, open data, inactive participants) need a
-  scheduler; a Railway cron service running the `decidim:*` rake tasks would do.
-- Backups: Railway Postgres volume backups are not enabled.
