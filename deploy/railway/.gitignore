@@ -1,0 +1,14 @@
+/.bundle
+/.env*
+/log/*
+/tmp/*
+/storage/*
+/config/*.key
+/config/credentials.yml.enc
+/node_modules
+# Copied from the Decidim checkout at build time.
+/packages
+/public/decidim-packs
+/public/packs-test
+/public/sw.js*
+tailwind.config.js
