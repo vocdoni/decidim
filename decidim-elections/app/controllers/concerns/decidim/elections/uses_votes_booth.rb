@@ -10,7 +10,9 @@ module Decidim
         include UsesCensusAccess
 
         layout "decidim/election_booth"
-        helper_method :questions, :question, :response_chosen?, :votes_buffer
+        helper_method :questions, :question, :response_chosen?, :votes_buffer, :voting_backend
+
+        before_action :append_voting_backend_csp_directives
 
         before_action except: [:new, :create, :receipt] do
           next if session_authenticated?
@@ -19,7 +21,7 @@ module Decidim
         end
 
         before_action only: :new do
-          redirect_to action: :show, id: question if session_authenticated?
+          redirect_to first_ballot_step if session_authenticated?
         end
 
         # If the election has a census manifest that a requires authentication, render the auth form
@@ -38,7 +40,7 @@ module Decidim
           @form = election.census.form_instance(params, election:, current_user:)
           if @form.valid?
             session[:session_attributes] = @form.attributes
-            redirect_to action: :show, id: question
+            redirect_to first_ballot_step
           else
             flash[:alert] =
               @form.errors.full_messages.join("<br>").presence || t("failed", scope: "decidim.elections.votes.check_census")
@@ -64,7 +66,34 @@ module Decidim
         render "decidim/elections/votes/receipt"
       end
 
+      # Client-side booth: every question, the confirm step and the receipt in
+      # one page. Answers stay in the browser and are cast by the backend's
+      # JavaScript adapter; nothing is posted back here.
+      def booth
+        enforce_permission_to(:create, :vote, election:)
+        return redirect_to(action: :show, id: question) unless voting_backend.client?
+
+        @booth_config = voting_backend.booth_config_for(election, voter_uid:, current_user:)
+        render "decidim/elections/votes/booth"
+      end
+
       private
+
+      def voting_backend
+        election.voting_backend
+      end
+
+      def first_ballot_step
+        return { action: :booth } if voting_backend.client?
+
+        { action: :show, id: question }
+      end
+
+      def append_voting_backend_csp_directives
+        voting_backend.csp_directives_for(election).each do |directive, values|
+          Array(values).each { |value| content_security_policy.append_csp_directive(directive.to_s, value) }
+        end
+      end
 
       def questions
         @questions ||= election.questions

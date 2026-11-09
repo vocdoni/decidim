@@ -331,6 +331,24 @@ en:
           edit_vote: Edit your vote
           exit_button: Exit the voting booth
           title: Your votes have been cast successfully
+        booth:
+          already_recorded:
+            body: You are only being asked the remaining questions. Receipts for votes already recorded will appear at the end.
+            title: Part of your ballot is already recorded
+          backend_missing: The voting booth could not start. Please reload the page.
+          cannot_vote: You cannot vote in this election.
+          casting: Casting your vote…
+          loading: Preparing your ballot…
+          submit:
+            done: Recorded
+            failed: Not recorded
+            recheck: Check whether my vote was recorded
+            rechecking: Asking the voting network…
+            retry: Try the failed questions again
+            summary_failed: Some of your votes could not be cast. Nothing was recorded for them, so you can safely try again.
+            summary_unconfirmed: We lost contact while sending some of your votes. They may still have been recorded — check before trying again, so you do not send them twice.
+            title: Casting your vote
+            unconfirmed: Not confirmed
     metadata:
       progress:
         published_results: 'Results published: %{end_date}'

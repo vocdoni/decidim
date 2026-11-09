@@ -13,6 +13,7 @@ module Decidim
               get :confirm
               post :cast
               get :receipt
+              get :booth
             end
           end
           resources :per_question_votes, except: [:edit, :destroy] do
@@ -40,6 +41,12 @@ module Decidim
       initializer "decidim_elections.data_migrate", after: "decidim_core.data_migrate" do
         DataMigrate.configure do |config|
           config.data_migrations_path << root.join("db/data").to_s
+        end
+      end
+
+      initializer "decidim.elections.default_voting_backends" do |_app|
+        Decidim::Elections.voting_backends.register(:decidim) do |manifest|
+          manifest.transport = :server
         end
       end
 

@@ -328,6 +328,24 @@ ca:
           edit_vote: Edita el teu vot
           exit_button: Sortir de la cabina de votació
           title: El teu vot s'ha emès correctament
+        booth:
+          already_recorded:
+            body: "Només se t'estan fent les preguntes restants. Els rebuts dels vots ja registrats apareixeran al final."
+            title: Part del teu vot ja està registrada
+          backend_missing: La cabina de votació no s'ha pogut iniciar. Si us plau, recarrega la pàgina.
+          cannot_vote: No pots votar en aquestes eleccions.
+          casting: "Emetent el teu vot…"
+          loading: "Preparant la teva papereta…"
+          submit:
+            done: Registrat
+            failed: No registrat
+            recheck: Comprovar si s'ha registrat el meu vot
+            rechecking: "Consultant la xarxa de votació…"
+            retry: Tornar a enviar les preguntes fallides
+            summary_failed: Alguns dels teus vots no s'han pogut emetre. No s'ha registrat res, de manera que pots tornar-ho a intentar de forma segura.
+            summary_unconfirmed: "Hem perdut el contacte mentre enviàvem alguns dels teus vots. És possible que s'hagin registrat; comprova-ho abans de tornar a intentar-ho per no enviar-los dues vegades."
+            title: Emetent el teu vot
+            unconfirmed: No confirmat
     metadata:
       progress:
         published_results: 'Resultats publicats: %{end_date}'
