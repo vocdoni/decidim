@@ -286,6 +286,52 @@ module Decidim
           end
         end
       end
+
+      context "when using a client-side voting backend" do
+        let(:backend_name) { :test_client_pq_backend }
+        let(:booth_path) { "/elections/#{election.id}/votes/booth" }
+
+        before do
+          Decidim::Elections.voting_backends.register(backend_name) do |manifest|
+            manifest.transport = :client
+            manifest.client_adapter = "test_backend"
+            manifest.client_script = "/test/booth.js"
+            manifest.vote_overwrite = false
+            manifest.applies_to { |e| e.id == election.id }
+            manifest.booth_config { |_e, **_opts| {} }
+            manifest.csp_directives { |_e| {} }
+          end
+          sign_in user
+          allow(controller).to receive(:booth_election_votes_path).and_return(booth_path)
+        end
+
+        after do
+          Decidim::Elections.voting_backends.manifests.delete_if { |m| m.name == backend_name }
+        end
+
+        it "redirects HTML show to the booth" do
+          get(:show, params:)
+          expect(response).to redirect_to(booth_path)
+        end
+
+        it "redirects HTML update to the booth without storing a vote" do
+          expect do
+            patch(:update, params: params.merge(id: question.id, response: { question.id.to_s => [question.response_options.first.id] }))
+          end.not_to(change(Decidim::Elections::Vote, :count))
+          expect(response).to redirect_to(booth_path)
+        end
+
+        it "redirects HTML receipt to the booth" do
+          get(:receipt, params:)
+          expect(response).to redirect_to(booth_path)
+        end
+
+        it "still answers JSON show for per-question status polling" do
+          get :show, params: params.merge(id: question.id), format: :json
+          expect(response).to have_http_status(:ok)
+          expect(response.parsed_body).to have_key("voting_enabled")
+        end
+      end
     end
   end
 end

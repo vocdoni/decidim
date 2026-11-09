@@ -252,6 +252,51 @@ module Decidim
           end
         end
       end
+
+      context "when the election is per-question and uses a client-side backend" do
+        let(:backend_name) { :test_client_backend }
+        let(:booth_path) { "/elections/#{election.id}/votes/booth" }
+
+        before do
+          Decidim::Elections.voting_backends.register(backend_name) do |manifest|
+            manifest.transport = :client
+            manifest.client_adapter = "test_backend"
+            manifest.client_script = "/test/booth.js"
+            manifest.vote_overwrite = false
+            manifest.applies_to { |e| e.id == election.id }
+            manifest.booth_config { |_e, **_opts| {} }
+            manifest.csp_directives { |_e| {} }
+          end
+          election.update(results_availability: "per_question")
+          sign_in user
+          allow(controller).to receive(:booth_election_votes_path).and_return(booth_path)
+          allow(controller).to receive(:exit_path).and_return("/")
+          allow(controller).to receive(:election_path).and_return("/")
+          allow(controller).to receive(:elections_path).and_return("/")
+        end
+
+        after do
+          Decidim::Elections.voting_backends.manifests.delete_if { |m| m.name == backend_name }
+        end
+
+        it "does not redirect to the per-question path and renders the booth" do
+          get(:booth, params:)
+          expect(response).not_to redirect_to(new_election_per_question_vote_path)
+          expect(response).to have_http_status(:ok)
+        end
+      end
+
+      context "when the election is per-question and uses a server-side backend" do
+        before do
+          sign_in user
+          election.update(results_availability: "per_question")
+        end
+
+        it "redirects from show to the per-question path" do
+          get(:show, params:)
+          expect(response).to redirect_to(new_election_per_question_vote_path)
+        end
+      end
     end
   end
 end

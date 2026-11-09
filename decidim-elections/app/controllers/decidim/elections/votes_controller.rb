@@ -8,7 +8,7 @@ module Decidim
       include Decidim::FormFactory
 
       before_action do
-        redirect_to Decidim::EngineRouter.main_proxy(current_component).new_election_per_question_vote_path(election) if election.per_question?
+        redirect_to Decidim::EngineRouter.main_proxy(current_component).new_election_per_question_vote_path(election) if election.per_question? && !voting_backend.client?
       end
 
       # A client-side backend never stores answers on the server: the

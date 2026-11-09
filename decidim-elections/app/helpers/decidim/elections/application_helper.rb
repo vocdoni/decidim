@@ -60,8 +60,12 @@ module Decidim
       end
 
       def voted_by_current_user?(election)
-        voter_uid = session[:voter_uid] || election.census.voter_uid(election, {}, current_user:)
-        election.votes.exists?(voter_uid:)
+        voter_uid = session[:voter_uid] || election.census.voter_uid(election, session[:session_attributes] || {}, current_user:)
+        if election.voting_backend.client?
+          election.voting_backend.voted?(election, voter_uid)
+        else
+          election.votes.exists?(voter_uid:)
+        end
       end
     end
   end

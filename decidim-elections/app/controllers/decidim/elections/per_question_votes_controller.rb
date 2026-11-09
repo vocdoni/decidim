@@ -7,6 +7,12 @@ module Decidim
       include Decidim::Elections::UsesVotesBooth
       include Decidim::FormFactory
 
+      # A client-side backend casts from the booth; the server-side per-question steps would record a
+      # vote the backend never sees.
+      before_action do
+        redirect_to booth_election_votes_path(election) if voting_backend.client? && !request.format.json?
+      end
+
       before_action do
         redirect_to Decidim::EngineRouter.main_proxy(current_component).new_election_vote_path(election) unless election.per_question?
       end

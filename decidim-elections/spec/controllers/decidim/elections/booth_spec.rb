@@ -51,7 +51,7 @@ module Decidim
 
         after do
           # Remove the test backend so it does not bleed into other examples.
-          Decidim::Elections.instance_variable_set(:@voting_backends, nil)
+          Decidim::Elections.voting_backends.manifests.delete_if { |m| m.name == backend_name }
         end
 
         context "when the voting backend allows vote overwrite" do
