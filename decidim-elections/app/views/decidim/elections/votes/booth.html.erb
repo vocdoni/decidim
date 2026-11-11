@@ -13,7 +13,6 @@
        casting: t("casting", scope: "decidim.elections.votes.booth"),
        backend_missing: t("backend_missing", scope: "decidim.elections.votes.booth"),
        cannot_vote: t("cannot_vote", scope: "decidim.elections.votes.booth"),
-       already_recorded: t("already_recorded", scope: "decidim.elections.votes.booth"),
        submit: t("submit", scope: "decidim.elections.votes.booth")
      }.to_json %>">
 
@@ -24,7 +23,9 @@
   </section>
 
   <section data-booth-step="error" hidden>
-    <div class="callout alert" role="alert" data-booth-error-message></div>
+    <div class="flash flex-col alert" role="alert" data-announcement>
+      <div class="flash__message" data-booth-error-message></div>
+    </div>
     <%= link_to t("exit_button", scope: "decidim.elections.votes.receipt"), exit_path, class: "button button__lg button__transparent-secondary mt-8" %>
   </section>
 
@@ -35,7 +36,9 @@
   <% end %>
 
   <form data-booth-form novalidate>
-    <div class="callout mb-6" data-booth-already-recorded hidden></div>
+    <div class="mb-6" data-booth-already-recorded hidden>
+      <%= cell("decidim/announcement", { title: t("already_recorded.title", scope: "decidim.elections.votes.booth"), body: t("already_recorded.body", scope: "decidim.elections.votes.booth") }) %>
+    </div>
     <% questions.each_with_index do |booth_question, index| %>
       <section data-booth-step="question" data-booth-question
                data-question-id="<%= booth_question.id %>"
@@ -108,6 +111,7 @@
     <%= link_to t("exit_button", scope: "decidim.elections.votes.receipt"), exit_path, class: "button button__secondary button__lg w-full mt-4" %>
   </section>
 
+  <%# Same markup as votes/receipt.html.erb, plus the backend's receipts. %>
   <section data-booth-step="receipt" hidden>
     <div class="vote-submitted">
       <div>
@@ -116,14 +120,23 @@
         <% if voting_backend.vote_overwrite %>
           <p class="text-center"><%= t("description", scope: "decidim.elections.votes.receipt") %></p>
         <% end %>
+        <% if voting_backend.receipt_partial.present? %>
+          <%= render partial: voting_backend.receipt_partial, locals: { election:, booth_config: @booth_config } %>
+        <% end %>
       </div>
-      <ul class="space-y-4 mt-8" data-booth-receipts></ul>
-      <% if voting_backend.receipt_partial.present? %>
-        <%= render partial: voting_backend.receipt_partial, locals: { election:, booth_config: @booth_config } %>
-      <% end %>
+      <div class="selected_responses space-y-6 mt-8" data-booth-receipts></div>
       <%= link_to t("exit_button", scope: "decidim.elections.votes.receipt"), exit_path, class: "button button__secondary button__lg w-full mt-12" %>
     </div>
   </section>
+
+  <%# The flash the server-side booth sets on cast (`votes.cast.success`), in the markup of `display_flash_messages`. %>
+  <template data-booth-cast-flash>
+    <div class="flash success" data-alert-box data-closable role="alert" aria-atomic="true">
+      <div class="flash__icon"><%= icon "checkbox-circle-line" %></div>
+      <p class="flash__message"><%= t("success", scope: "decidim.elections.votes.cast") %></p>
+      <button class="close-button" type="button" data-close aria-label="<%= t("decidim.alert.dismiss") %>"><%= icon "close-line" %></button>
+    </div>
+  </template>
 </div>
 
 <% if voting_backend.client_script.present? %>

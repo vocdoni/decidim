@@ -81,19 +81,20 @@ const initBooth = async (root) => {
     return !max || selected(section).length <= max;
   };
 
+  // One receipt per question, laid out like the confirm step's answer list.
   const buildReceiptItem = (item) => {
     const qSection = questions.find((sect) => sect.dataset.questionId === String(item.questionId));
-    const li = document.createElement("li");
-    li.className = "rounded-lg border border-gray p-4";
+    const block = document.createElement("div");
     const title = document.createElement("p");
     title.className = "font-semibold mb-2";
     title.textContent = qSection
       ? qSection.dataset.questionTitle
       : String(item.questionId);
-    const code = document.createElement("code");
-    code.className = "block break-all";
+    const code = document.createElement("p");
+    code.className = "truncate font-mono text-sm text-gray-2";
+    code.title = item.code;
     code.textContent = item.code;
-    li.append(title, code);
+    block.append(title, code);
     if (item.verifyUrl) {
       const link = document.createElement("a");
       link.href = item.verifyUrl;
@@ -103,17 +104,38 @@ const initBooth = async (root) => {
       link.textContent = config.i18n && config.i18n.receipt && config.i18n.receipt.open
         ? config.i18n.receipt.open
         : item.verifyUrl;
-      li.append(link);
+      block.append(link);
     }
 
-    return li;
+    return block;
   };
 
-  const showReceipt = (receipts) => {
+  // Shows the success flash the server-side booth sets on cast, in the
+  // layout's flash container (created when the page rendered without one).
+  const showCastFlash = () => {
+    const template = root.querySelector("template[data-booth-cast-flash]");
+    const main = document.querySelector("main");
+    if (!template || !main) {
+      return;
+    }
+    let container = document.getElementById("flash-messages-container");
+    if (!container) {
+      container = document.createElement("div");
+      container.id = "flash-messages-container";
+      container.className = "container";
+      main.before(container);
+    }
+    container.append(template.content.cloneNode(true));
+  };
+
+  const showReceipt = (receipts, { cast = false } = {}) => {
     const list = receipt.querySelector("[data-booth-receipts]");
     list.innerHTML = "";
     (receipts || []).forEach((item) => list.append(buildReceiptItem(item)));
     progress("");
+    if (cast) {
+      showCastFlash();
+    }
     show(receipt);
   };
 
@@ -220,7 +242,7 @@ const initBooth = async (root) => {
     const result = await adapter.cast(ctx, ballot);
     const allConfirmed = [...priorReceipts, ...result.receipts];
     if (result.unconfirmed.length === 0 && result.failed.length === 0) {
-      showReceipt(allConfirmed);
+      showReceipt(allConfirmed, { cast: true });
     } else {
       showSubmit({ confirmed: allConfirmed, unconfirmed: result.unconfirmed, failed: result.failed });
     }
@@ -245,13 +267,6 @@ const initBooth = async (root) => {
       activeQuestions = questions.filter((sect) => pendingIds.includes(sect.dataset.questionId));
 
       if (alreadyRecordedBanner) {
-        const ar = (i18n.already_recorded || {});
-        const heading = document.createElement("h4");
-        heading.className = "font-semibold";
-        heading.textContent = ar.title || "";
-        const para = document.createElement("p");
-        para.textContent = ar.body || "";
-        alreadyRecordedBanner.append(heading, para);
         alreadyRecordedBanner.hidden = false;
       }
     }

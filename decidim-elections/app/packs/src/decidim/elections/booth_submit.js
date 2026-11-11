@@ -9,7 +9,7 @@ import { findVotingBackend } from "src/decidim/elections/voting_backends";
  * @param {Function} opts.progress - progress status updater.
  * @param {Function} opts.show - step display function.
  * @param {Function} opts.showReceipt - receipt display function.
- * @param {Function} opts.buildReceiptItem - builds a confirmed receipt `<li>`.
+ * @param {Function} opts.buildReceiptItem - builds the receipt block of a confirmed question.
  * @param {Function} opts.selected - returns checked input values for a section.
  * @param {Object} opts.i18n - booth i18n strings.
  * @param {Object} opts.ctx - voting backend context.
@@ -67,12 +67,12 @@ export const createSubmitStep = ({ questions, submitStep, progress, show, showRe
     recheckBtn.hidden = true;
 
     confirmed.forEach((item) => {
-      const li = buildReceiptItem(item);
-      li.classList.add("border-success");
+      const li = document.createElement("li");
+      li.className = "rounded-lg border border-success p-4";
       const badge = document.createElement("span");
       badge.className = "text-success text-sm font-semibold";
       badge.textContent = sub.done || "";
-      li.prepend(badge);
+      li.append(badge, buildReceiptItem(item));
       list.append(li);
     });
     unconfirmed.forEach((item) => list.append(makeStatusRow({ cls: "warning", badge: sub.unconfirmed || "", text: questionTitle(item) })));
@@ -111,7 +111,7 @@ export const createSubmitStep = ({ questions, submitStep, progress, show, showRe
       const retryResult = await retryAdapter.cast(ctx, retryBallot);
       const nextConfirmed = [...confirmed, ...retryResult.receipts];
       if (retryResult.unconfirmed.length === 0 && retryResult.failed.length === 0) {
-        showReceipt(nextConfirmed);
+        showReceipt(nextConfirmed, { cast: true });
       } else {
         showSubmit({ confirmed: nextConfirmed, unconfirmed: retryResult.unconfirmed, failed: retryResult.failed });
       }
@@ -133,7 +133,7 @@ export const createSubmitStep = ({ questions, submitStep, progress, show, showRe
       const nowConfirmed = [...confirmed, ...recheckResult.receipts];
       const stillUnconfirmed = unconfirmed.filter((item) => !recheckIds.has(String(item.questionId)));
       if (stillUnconfirmed.length === 0 && failed.length === 0) {
-        showReceipt(nowConfirmed);
+        showReceipt(nowConfirmed, { cast: true });
       } else {
         showSubmit({ confirmed: nowConfirmed, unconfirmed: stillUnconfirmed, failed });
       }
