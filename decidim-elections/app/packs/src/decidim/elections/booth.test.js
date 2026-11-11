@@ -62,7 +62,7 @@ describe("client-side booth with questions that open later", () => {
     await flush();
 
     expect(adapter.cast).toHaveBeenLastCalledWith(ctx, [{ questionId: "2", responseOptionIds: [] }]);
-    const codes = Array.from(document.querySelectorAll("[data-booth-receipts] code")).map((code) => code.textContent);
+    const codes = Array.from(document.querySelectorAll("[data-booth-receipts] p[title]")).map((code) => code.textContent);
     expect(codes).toEqual(["0xaa", "0xbb"]);
   });
 });

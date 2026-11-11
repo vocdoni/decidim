@@ -42,8 +42,9 @@ export const booth = (ids) => `
     <section data-booth-step="receipt" hidden>
       <div data-booth-receipt-header></div>
       <div data-booth-waiting hidden></div>
-      <ul data-booth-receipts></ul>
+      <div data-booth-receipts></div>
     </section>
+    <template data-booth-cast-flash><div class="flash success">cast ok</div></template>
   </div>`;
 
 export const flush = async () => {
@@ -73,7 +74,7 @@ export const mountBooth = async (ids, state = { canVote: true, alreadyVoted: fal
     }),
     cast: jest.fn(async () => ({ receipts: ids.map((id) => ({ questionId: id, code: `0x${id}` })), unconfirmed: [], failed: [] }))
   };
-  document.body.innerHTML = booth(ids);
+  document.body.innerHTML = `<main>${booth(ids)}</main>`;
   window.Decidim = { votingBackends: { fake: adapter } };
   jest.isolateModules(() => {
     // eslint-disable-next-line global-require -- the booth starts on import, after the DOM is set up

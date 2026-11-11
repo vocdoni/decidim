@@ -1,7 +1,7 @@
 import { findVotingBackend } from "src/decidim/elections/voting_backends";
 import { createSubmitStep } from "src/decidim/elections/booth_submit";
 import { createQuestionLoader } from "src/decidim/elections/booth_live";
-import { createReceiptPanels } from "src/decidim/elections/booth_receipt";
+import { createReceiptItemBuilder, createReceiptPanels, showCastFlash } from "src/decidim/elections/booth_receipt";
 
 /**
  * Client-side booth stepper. Shows one question at a time, then the confirm
@@ -93,40 +93,18 @@ const initBooth = async (root) => {
     return !max || selected(section).length <= max;
   };
 
-  const buildReceiptItem = (item) => {
-    const qSection = questions.find((sect) => sect.dataset.questionId === String(item.questionId));
-    const li = document.createElement("li");
-    li.className = "rounded-lg border border-gray p-4";
-    const title = document.createElement("p");
-    title.className = "font-semibold mb-2";
-    title.textContent = qSection
-      ? qSection.dataset.questionTitle
-      : String(item.questionId);
-    const code = document.createElement("code");
-    code.className = "block break-all";
-    code.textContent = item.code;
-    li.append(title, code);
-    if (item.verifyUrl) {
-      const link = document.createElement("a");
-      link.href = item.verifyUrl;
-      link.target = "_blank";
-      link.rel = "noopener";
-      link.className = "button button__sm button__text-secondary mt-2";
-      link.textContent = config.i18n && config.i18n.receipt && config.i18n.receipt.open
-        ? config.i18n.receipt.open
-        : item.verifyUrl;
-      li.append(link);
-    }
+  const buildReceiptItem = createReceiptItemBuilder(questions, config);
 
-    return li;
-  };
-
-  const showReceipt = (receipts) => {
+  // `cast` marks a receipt reached by casting now, not by an earlier visit.
+  const showReceipt = (receipts, { cast = false } = {}) => {
     const list = receipt.querySelector("[data-booth-receipts]");
     list.innerHTML = "";
     (receipts || []).forEach((item) => list.append(buildReceiptItem(item)));
     receiptPanels.hideBanner();
     progress("");
+    if (cast) {
+      showCastFlash(root);
+    }
     show(receipt);
   };
 
@@ -250,7 +228,7 @@ const initBooth = async (root) => {
     const result = await adapter.cast(ctx, ballot);
     const allConfirmed = [...priorReceipts, ...result.receipts];
     if (result.unconfirmed.length === 0 && result.failed.length === 0) {
-      showReceipt(allConfirmed);
+      showReceipt(allConfirmed, { cast: true });
     } else {
       showSubmit({ confirmed: allConfirmed, unconfirmed: result.unconfirmed, failed: result.failed });
     }
@@ -260,7 +238,7 @@ const initBooth = async (root) => {
   begin = async () => {
     activeQuestions = questions;
     priorReceipts = [];
-    receiptPanels.hideBanner({ clear: true });
+    receiptPanels.hideBanner();
     try {
       const state = await adapter.prepare(ctx);
       if (state.alreadyVoted) {
