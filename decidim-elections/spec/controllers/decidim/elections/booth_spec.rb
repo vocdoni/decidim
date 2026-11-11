@@ -76,6 +76,12 @@ module Decidim
               I18n.t("description", scope: "decidim.elections.votes.receipt")
             )
           end
+
+          it "ships the stock cast success flash for the receipt step" do
+            get(:booth, params:)
+            expect(response.body).to include("data-booth-cast-flash")
+            expect(response.body).to include(I18n.t("success", scope: "decidim.elections.votes.cast"))
+          end
         end
       end
     end
