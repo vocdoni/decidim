@@ -52,7 +52,9 @@ const initBooth = async (root) => {
     // Navigating away from the receipt hides the waiting panel and restores its header.
     if (section !== receipt && waitingPanel) {
       waitingPanel.hidden = true;
-      if (receiptHeader) { receiptHeader.hidden = false; }
+      if (receiptHeader) {
+        receiptHeader.hidden = false;
+      }
     }
     const heading = section.querySelector("[tabindex='-1']");
     if (heading) {
@@ -95,8 +97,10 @@ const initBooth = async (root) => {
       if (!waitingPanel) {
         return;
       }
-      if (on && receipt.hidden) {
-        progress(i18n.waiting && i18n.waiting.title || "");
+      if (receipt.hidden) {
+        progress(on && i18n.waiting
+          ? i18n.waiting.title
+          : "");
         return;
       }
       waitingPanel.hidden = !on;
