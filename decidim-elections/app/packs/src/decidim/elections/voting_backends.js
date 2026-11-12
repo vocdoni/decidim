@@ -8,6 +8,10 @@
  *   prepare(ctx)        -> { canVote, alreadyVoted, receipts?, message? }
  *   cast(ctx, ballot)   -> { receipts: [{ questionId, code, verifyUrl? }] }
  *   ballot = [{ questionId: "12", responseOptionIds: ["34"] }]
+ *
+ * Besides progress/error/showPanel, the booth's `ctx` offers
+ * `loadQuestions(url)` and `restart()` for questions that open after the page
+ * was rendered (see `booth_live.js`).
  */
 export const REGISTERED_EVENT = "decidim:voting-backend:registered";
 

@@ -1,5 +1,6 @@
 import { findVotingBackend } from "src/decidim/elections/voting_backends";
 import { createSubmitStep } from "src/decidim/elections/booth_submit";
+import { createQuestionLoader } from "src/decidim/elections/booth_live";
 
 /**
  * Client-side booth stepper. Shows one question at a time, then the confirm
@@ -11,6 +12,9 @@ import { createSubmitStep } from "src/decidim/elections/booth_submit";
  * booth presents only the pending questions and combines all receipts at the
  * end. When some questions fail or remain unconfirmed after casting, the submit
  * step (see `booth_submit.js`) shows per-question status with retry/recheck.
+ *
+ * Questions that open later are added in place: `ctx.loadQuestions(url)`, then
+ * `ctx.restart()` runs `prepare()` again (see `booth_live.js`).
  *
  * @param {HTMLElement} root - the `[data-voting-booth]` element.
  * @returns {Promise<void>} resolves once the booth reached its first step.
@@ -24,7 +28,7 @@ const initBooth = async (root) => {
   const config = JSON.parse(root.dataset.config || "{}");
   const i18n = JSON.parse(root.dataset.i18n || "{}");
   const statusEl = root.querySelector("[data-booth-status]");
-  const steps = Array.from(root.querySelectorAll("[data-booth-step]"));
+  const form = root.querySelector("[data-booth-form]");
   const questions = Array.from(root.querySelectorAll("[data-booth-question]"));
   const preBallot = root.querySelector("[data-booth-step='pre-ballot']");
   const confirm = root.querySelector("[data-booth-step='confirm']");
@@ -39,7 +43,8 @@ const initBooth = async (root) => {
   let priorReceipts = [];
 
   const show = (section) => {
-    steps.forEach((step) => {
+    // Queried each time: `ctx.loadQuestions` adds question steps.
+    root.querySelectorAll("[data-booth-step]").forEach((step) => {
       step.hidden = step !== section;
     });
     const heading = section.querySelector("[tabindex='-1']");
@@ -58,11 +63,17 @@ const initBooth = async (root) => {
     show(errorStep);
   };
 
+  // Bound below, once the steps and the adapter exist.
+  let addNavigationListeners = null;
+  let begin = null;
+
   const ctx = {
     config,
     i18n,
     progress,
     error: fail,
+    loadQuestions: createQuestionLoader({ form, questions, onAdded: (sections) => addNavigationListeners(sections) }),
+    restart: () => begin(),
     showPanel: () => {
       if (preBallot) {
         show(preBallot);
@@ -161,8 +172,18 @@ const initBooth = async (root) => {
       showConfirm();
       return;
     }
-    show(activeQuestions[index]);
+    const section = activeQuestions[Math.max(index, 0)];
+    const back = section.querySelector("[data-booth-back]");
+    if (back) {
+      // The server renders "back" by page position; this visit may start later.
+      back.style.visibility = section === activeQuestions[0]
+        ? "hidden"
+        : "";
+    }
+    show(section);
   };
+
+  const step = (section, offset) => showQuestion(activeQuestions.indexOf(section) + offset);
 
   /**
    * Attaches next/back navigation listeners to a question section list.
@@ -170,8 +191,8 @@ const initBooth = async (root) => {
    * @param {HTMLElement[]} qList - question sections to wire up.
    * @returns {void}
    */
-  const addNavigationListeners = (qList) => {
-    qList.forEach((section, index) => {
+  addNavigationListeners = (qList) => {
+    qList.forEach((section) => {
       const container = section.querySelector(".response[data-max-choices]");
       const alertEl = section.querySelector(".max-choices-alert");
       section.querySelectorAll("input[type=checkbox]").forEach((checkbox) => {
@@ -185,7 +206,7 @@ const initBooth = async (root) => {
       });
       const back = section.querySelector("[data-booth-back]");
       if (back) {
-        back.addEventListener("click", () => showQuestion(index - 1));
+        back.addEventListener("click", () => step(section, -1));
       }
       section.querySelector("[data-booth-next]").addEventListener("click", () => {
         if (!withinLimit(section)) {
@@ -193,7 +214,7 @@ const initBooth = async (root) => {
           return;
         }
         progress("");
-        showQuestion(index + 1);
+        step(section, 1);
       });
     });
   };
@@ -227,40 +248,46 @@ const initBooth = async (root) => {
     castButton.disabled = false;
   });
 
-  try {
-    const state = await adapter.prepare(ctx);
-    if (state.alreadyVoted) {
-      showReceipt(state.receipts);
-      return;
-    }
-    if (!state.canVote) {
-      fail(state.message || i18n.cannot_vote);
-      return;
-    }
-
-    // Handle partial ballot (some questions already cast in a prior visit).
-    if (state.priorReceipts && state.priorReceipts.length > 0) {
-      priorReceipts = state.priorReceipts;
-      const pendingIds = state.pendingQuestionIds || [];
-      activeQuestions = questions.filter((sect) => pendingIds.includes(sect.dataset.questionId));
-
-      if (alreadyRecordedBanner) {
-        const ar = (i18n.already_recorded || {});
-        const heading = document.createElement("h4");
-        heading.className = "font-semibold";
-        heading.textContent = ar.title || "";
-        const para = document.createElement("p");
-        para.textContent = ar.body || "";
-        alreadyRecordedBanner.append(heading, para);
-        alreadyRecordedBanner.hidden = false;
+  begin = async () => {
+    activeQuestions = questions;
+    priorReceipts = [];
+    try {
+      const state = await adapter.prepare(ctx);
+      if (state.alreadyVoted) {
+        showReceipt(state.receipts);
+        return;
       }
-    }
+      if (!state.canVote) {
+        fail(state.message || i18n.cannot_vote);
+        return;
+      }
 
-    progress("");
-    showQuestion(0);
-  } catch (error) {
-    fail(error.message);
-  }
+      // Handle partial ballot (some questions already cast in a prior visit).
+      if (state.priorReceipts && state.priorReceipts.length > 0) {
+        priorReceipts = state.priorReceipts;
+        const pendingIds = state.pendingQuestionIds || [];
+        activeQuestions = questions.filter((sect) => pendingIds.includes(sect.dataset.questionId));
+
+        if (alreadyRecordedBanner) {
+          const ar = (i18n.already_recorded || {});
+          const heading = document.createElement("h4");
+          heading.className = "font-semibold";
+          heading.textContent = ar.title || "";
+          const para = document.createElement("p");
+          para.textContent = ar.body || "";
+          alreadyRecordedBanner.replaceChildren(heading, para);
+          alreadyRecordedBanner.hidden = false;
+        }
+      }
+
+      progress("");
+      showQuestion(0);
+    } catch (error) {
+      fail(error.message);
+    }
+  };
+
+  await begin();
 };
 
 const start = () => document.querySelectorAll("[data-voting-booth]").forEach((root) => initBooth(root));
