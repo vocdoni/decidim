@@ -144,7 +144,7 @@ const initBooth = async (root) => {
     const list = receipt.querySelector("[data-booth-receipts]");
     list.innerHTML = "";
     (receipts || []).forEach((item) => list.append(buildReceiptItem(item)));
-    // F3: hide the "already recorded" banner on the receipt step.
+    // hide the "already recorded" banner on the receipt step.
     if (alreadyRecordedBanner) {
       alreadyRecordedBanner.hidden = true;
     }
@@ -204,7 +204,7 @@ const initBooth = async (root) => {
         ? "hidden"
         : "";
     }
-    // F2: last active question's "Next" button shows "Review your vote".
+    // last active question's "Next" button shows "Review your vote".
     const nextLabel = section.querySelector("[data-booth-next-label]");
     if (nextLabel && i18n.review) {
       const isLast = section === activeQuestions[activeQuestions.length - 1];
@@ -281,7 +281,7 @@ const initBooth = async (root) => {
   begin = async () => {
     activeQuestions = questions;
     priorReceipts = [];
-    // F3: reset the "already recorded" banner at the start of each begin cycle.
+    // reset the "already recorded" banner at the start of each begin cycle.
     if (alreadyRecordedBanner) {
       alreadyRecordedBanner.hidden = true;
       alreadyRecordedBanner.replaceChildren();

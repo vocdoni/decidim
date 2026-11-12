@@ -11,7 +11,7 @@ module Decidim
 
         def call
           return broadcast(:invalid) unless action.in?([:enable_voting, :publish_results])
-          # No-op guard: already in the requested state → succeed without events or DB write.
+          # Already in the requested state (e.g. a double submit): succeed without events or writes.
           return broadcast(:ok, question) if already_in_requested_state?
           return broadcast(:invalid) if invalid_publish?
 
@@ -58,7 +58,7 @@ module Decidim
           end
         end
 
-        # B3: when the last unpublished question of a per_question election is published,
+        # when the last unpublished question of a per_question election is published,
         # also set election.published_results_at in the same transaction.
         def publish_election_results_if_last!
           return unless action == :publish_results

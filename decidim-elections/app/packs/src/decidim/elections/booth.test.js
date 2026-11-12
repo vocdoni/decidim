@@ -110,7 +110,7 @@ describe("client-side booth with questions that open later", () => {
   });
 });
 
-describe("F2: review label on last active question", () => {
+describe("review label on last active question", () => {
   let ctx = null;
 
   beforeEach(async () => {
@@ -180,7 +180,7 @@ describe("F2: review label on last active question", () => {
   });
 });
 
-describe("F3: already-recorded banner hidden on receipt", () => {
+describe("already-recorded banner hidden on receipt", () => {
   let adapter = null;
   let ctx = null;
 
@@ -230,7 +230,7 @@ describe("F3: already-recorded banner hidden on receipt", () => {
   });
 });
 
-describe("F1: ctx.waiting shows and hides the waiting panel", () => {
+describe("ctx.waiting shows and hides the waiting panel", () => {
   let ctx = null;
 
   beforeEach(async () => {
