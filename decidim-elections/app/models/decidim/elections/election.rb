@@ -21,6 +21,10 @@ module Decidim
       include Decidim::HasReference
       include ActionView::Helpers::NumberHelper
 
+      # The three built-in results_availability values. External Decidim modules
+      # can add to this list via `Decidim::Elections.register_results_availability(:name)`
+      # from their engine initializer; the enum itself is defined at
+      # `config.after_initialize` time so late registrations are picked up.
       RESULTS_AVAILABILITY_OPTIONS = %w(real_time per_question after_end).freeze
 
       has_many :voters, class_name: "Decidim::Elections::Voter", inverse_of: :election, dependent: :destroy
@@ -36,8 +40,6 @@ module Decidim
       translatable_fields :title, :description
 
       validates :title, presence: true
-
-      enum :results_availability, RESULTS_AVAILABILITY_OPTIONS.index_with(&:to_s)
 
       scope :scheduled, -> { published.where(start_at: Time.current..).or(published.where(start_at: nil, published_results_at: nil, end_at: Time.current..)) }
       scope :ongoing, -> { published.where(start_at: ..Time.current, end_at: Time.current..) }

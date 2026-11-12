@@ -43,6 +43,17 @@ module Decidim
         end
       end
 
+      # Bake the results_availability enum after all engines have had a chance
+      # to call `Decidim::Elections.register_results_availability(:name)` in
+      # their own initializers. Runs once, at boot.
+      initializer "decidim_elections.results_availability_enum" do |app|
+        app.config.after_initialize do
+          Decidim::Elections::Election.class_eval do
+            enum :results_availability, Decidim::Elections.results_availability_options.index_with(&:to_s)
+          end
+        end
+      end
+
       initializer "decidim.elections.default_censuses" do |_app|
         Decidim::Elections.census_registry.register(:token_csv) do |manifest|
           manifest.admin_form = "Decidim::Elections::Admin::Censuses::TokenCsvForm"

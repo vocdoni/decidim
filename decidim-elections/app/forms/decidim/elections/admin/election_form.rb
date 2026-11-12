@@ -23,7 +23,7 @@ module Decidim
         attachments_attribute :attachments
 
         validates :title, translatable_presence: true
-        validates :results_availability, inclusion: { in: Decidim::Elections::Election::RESULTS_AVAILABILITY_OPTIONS }
+        validates :results_availability, inclusion: { in: ->(_) { Decidim::Elections.results_availability_options } }
         validates :start_at, date: { before: :end_at }, unless: :manual_start?
         validates :start_at, date: { after: proc { Time.current } }, if: ->(f) { f.election&.scheduled? && f.start_at.present? }
         validates :manual_start, acceptance: true, if: :per_question_not_started?
@@ -38,7 +38,7 @@ module Decidim
         end
 
         def results_availability_labels
-          Decidim::Elections::Election::RESULTS_AVAILABILITY_OPTIONS.map do |type|
+          Decidim::Elections.results_availability_options.map do |type|
             [type, I18n.t("decidim.elections.admin.elections.form.results_availability.#{type}")]
           end
         end

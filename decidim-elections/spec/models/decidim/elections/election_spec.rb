@@ -410,6 +410,40 @@ module Decidim
         it "raises error for invalid value" do
           expect { election.results_availability = "invalid" }.to raise_error(ArgumentError)
         end
+
+        describe "extension via Decidim::Elections.register_results_availability" do
+          it "seeds the options list with the three built-in values" do
+            expect(Decidim::Elections.results_availability_options).to include("real_time", "per_question", "after_end")
+          end
+
+          it "appends a new option when registered" do
+            Decidim::Elections.register_results_availability(:custom_option)
+            expect(Decidim::Elections.results_availability_options).to include("custom_option")
+          ensure
+            Decidim::Elections.results_availability_options.delete("custom_option")
+          end
+
+          it "coerces symbols to strings" do
+            Decidim::Elections.register_results_availability(:sym_option)
+            expect(Decidim::Elections.results_availability_options).to include("sym_option")
+            expect(Decidim::Elections.results_availability_options).not_to include(:sym_option)
+          ensure
+            Decidim::Elections.results_availability_options.delete("sym_option")
+          end
+
+          it "is idempotent — duplicate registration is a no-op" do
+            Decidim::Elections.register_results_availability(:dup_option)
+            Decidim::Elections.register_results_availability(:dup_option)
+            expect(Decidim::Elections.results_availability_options.count("dup_option")).to eq(1)
+          ensure
+            Decidim::Elections.results_availability_options.delete("dup_option")
+          end
+
+          it "keeps the built-in constant unchanged for backward compat" do
+            expect(Decidim::Elections::Election::RESULTS_AVAILABILITY_OPTIONS).to eq(%w(real_time per_question after_end))
+            expect(Decidim::Elections::Election::RESULTS_AVAILABILITY_OPTIONS).to be_frozen
+          end
+        end
       end
 
       describe "#presenter" do
