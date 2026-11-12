@@ -18,7 +18,7 @@ module Decidim
         # the backend has no live tally, until the question's (or election's) results
         # are published.
         describe "encrypted-until-published note" do
-          let!(:election) { create(:election, :published, :ongoing, :per_question, component:) }
+          let!(:election) { create(:election, :published, :ongoing, :per_question, :with_token_csv_census, component:) }
           let!(:question) { create(:election_question, :with_response_options, election:) }
           let(:backend_name) { :"test_live_tally_#{SecureRandom.hex(4)}" }
 
@@ -83,7 +83,7 @@ module Decidim
           end
 
           context "when the election is not per_question and results are not published" do
-            let!(:election) { create(:election, :published, :ongoing, component:) }
+            let!(:election) { create(:election, :published, :ongoing, :with_token_csv_census, component:) }
 
             before do
               register_backend(live_tally: false)
