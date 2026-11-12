@@ -86,6 +86,7 @@ es:
             title: Preguntas
           questions_table:
             answer: Respuestas
+            encrypted_until_published: Los votos están cifrados hasta que publiques los resultados. Los recuentos aparecerán aquí entonces.
             percentage: Porcentaje
             total: Total
             votes: Votos

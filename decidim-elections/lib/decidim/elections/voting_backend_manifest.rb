@@ -24,6 +24,8 @@ module Decidim
       attribute :receipt_partial, String
       attribute :vote_overwrite, Boolean, default: true
       attribute :supports_per_question, Boolean, default: true
+      # Whether the backend exposes running vote tallies (false = encrypted ballot).
+      attribute :live_tally, Boolean, default: true
 
       validates :name, presence: true
       validates :transport, inclusion: { in: [:server, :client] }

@@ -87,6 +87,7 @@ en:
             title: Questions
           questions_table:
             answer: Answers
+            encrypted_until_published: Votes are encrypted until you publish the results. The counts appear here then.
             percentage: Percentage
             total: Total
             votes: Votes

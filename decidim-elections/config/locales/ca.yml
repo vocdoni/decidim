@@ -86,6 +86,7 @@ ca:
             title: Preguntes
           questions_table:
             answer: Respostes
+            encrypted_until_published: Els vots estan xifrats fins que publiquis els resultats. Els recomptes apareixeran aquí llavors.
             percentage: Percentatge
             total: Total
             votes: Vots

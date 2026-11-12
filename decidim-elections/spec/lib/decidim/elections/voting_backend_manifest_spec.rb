@@ -23,6 +23,15 @@ module Decidim
         it "defaults supports_per_question to true" do
           expect(manifest.supports_per_question).to be(true)
         end
+
+        it "defaults live_tally to true" do
+          expect(manifest.live_tally).to be(true)
+        end
+
+        it "allows live_tally to be set to false" do
+          manifest.live_tally = false
+          expect(manifest.live_tally).to be(false)
+        end
       end
 
       describe "validation" do
