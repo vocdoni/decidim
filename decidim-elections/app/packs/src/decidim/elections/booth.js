@@ -36,6 +36,8 @@ const initBooth = async (root) => {
   const receipt = root.querySelector("[data-booth-step='receipt']");
   const errorStep = root.querySelector("[data-booth-step='error']");
   const alreadyRecordedBanner = root.querySelector("[data-booth-already-recorded]");
+  const waitingPanel = receipt && receipt.querySelector("[data-booth-waiting]");
+  const receiptHeader = receipt && receipt.querySelector("[data-booth-receipt-header]");
 
   // Questions for this visit (all, or filtered when resuming a partial ballot).
   let activeQuestions = questions;
@@ -47,6 +49,10 @@ const initBooth = async (root) => {
     root.querySelectorAll("[data-booth-step]").forEach((step) => {
       step.hidden = step !== section;
     });
+    // Navigating away from the receipt hides the waiting panel automatically.
+    if (section !== receipt && waitingPanel) {
+      waitingPanel.hidden = true;
+    }
     const heading = section.querySelector("[tabindex='-1']");
     if (heading) {
       heading.focus();
@@ -80,6 +86,20 @@ const initBooth = async (root) => {
       }
 
       return preBallot;
+    },
+    // Shows or hides the in-receipt waiting panel (called by the adapter).
+    // true: show the spinner + title + description; false: hide and restore header.
+    waiting: (on) => {
+      if (!waitingPanel) {
+        return;
+      }
+      waitingPanel.hidden = !on;
+      if (receiptHeader) {
+        receiptHeader.hidden = on;
+      }
+      if (on) {
+        progress("");
+      }
     }
   };
 
@@ -124,6 +144,10 @@ const initBooth = async (root) => {
     const list = receipt.querySelector("[data-booth-receipts]");
     list.innerHTML = "";
     (receipts || []).forEach((item) => list.append(buildReceiptItem(item)));
+    // F3: hide the "already recorded" banner on the receipt step.
+    if (alreadyRecordedBanner) {
+      alreadyRecordedBanner.hidden = true;
+    }
     progress("");
     show(receipt);
   };
@@ -179,6 +203,12 @@ const initBooth = async (root) => {
       back.style.visibility = section === activeQuestions[0]
         ? "hidden"
         : "";
+    }
+    // F2: last active question's "Next" button shows "Review your vote".
+    const nextLabel = section.querySelector("[data-booth-next-label]");
+    if (nextLabel && i18n.review) {
+      const isLast = section === activeQuestions[activeQuestions.length - 1];
+      nextLabel.textContent = isLast ? i18n.review : i18n.next;
     }
     show(section);
   };
@@ -251,6 +281,11 @@ const initBooth = async (root) => {
   begin = async () => {
     activeQuestions = questions;
     priorReceipts = [];
+    // F3: reset the "already recorded" banner at the start of each begin cycle.
+    if (alreadyRecordedBanner) {
+      alreadyRecordedBanner.hidden = true;
+      alreadyRecordedBanner.replaceChildren();
+    }
     try {
       const state = await adapter.prepare(ctx);
       if (state.alreadyVoted) {

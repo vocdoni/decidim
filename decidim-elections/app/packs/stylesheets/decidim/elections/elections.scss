@@ -3,7 +3,8 @@
 }
 
 .vote-submitted,
-.waiting-room {
+.waiting-room,
+.booth-waiting {
   @apply flex flex-col items-center justify-center text-center h-[50vh];
 
   .spinner-container::before {

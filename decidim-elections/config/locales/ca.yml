@@ -313,6 +313,7 @@ ca:
         confirm:
           cast_vote: Enviar el vot
           edit_vote: Edita el teu vot
+          final_hint: Un cop enviat, el teu vot no es pot canviar.
           not_answered: No has respost a aquesta pregunta.
           title: Confirmar el teu vot
         not_authorized: No tens autorització per votar en aquestes eleccions.
@@ -323,12 +324,17 @@ ca:
           max_choices_alert: Has seleccionat massa opcions. Si us plau, desmarquen algunes per continuar.
           max_choices_exceeded: No pots seleccionar més de %{max} opcions. Si us plau, torna enrere i ajusta la teva selecció.
           next: Següent
+          review: Revisa el teu vot
         receipt:
           description: Pots tornar a votar en qualsevol moment mentre el període de votació estigui obert. El teu vot anterior serà substituït pel nou.
           edit_vote: Edita el teu vot
           exit_button: Sortir de la cabina de votació
           title: El teu vot s'ha emès correctament
         booth:
+          waiting:
+            cast: El teu vot ha estat emès.
+            description: La pregunta següent apareixerà aquí sola tan bon punt els organitzadors l'obrin.
+            title: Esperant la pregunta següent
           already_recorded:
             body: "Només se t'estan fent les preguntes restants. Els rebuts dels vots ja registrats apareixeran al final."
             title: Part del teu vot ja està registrada

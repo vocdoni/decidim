@@ -316,6 +316,7 @@ en:
         confirm:
           cast_vote: Cast vote
           edit_vote: Edit your vote
+          final_hint: Once cast, your vote cannot be changed.
           not_answered: You have not answered this question.
           title: Confirm your vote
         not_authorized: You are not authorized to vote in this election.
@@ -326,12 +327,17 @@ en:
           max_choices_alert: You have selected too many options. Please deselect some to continue.
           max_choices_exceeded: You cannot select more than %{max} options. Please go back and adjust your selection.
           next: Next
+          review: Review your vote
         receipt:
           description: You can vote again at any time while the voting period is open. Your previous vote will be overwritten by the new one.
           edit_vote: Edit your vote
           exit_button: Exit the voting booth
           title: Your votes have been cast successfully
         booth:
+          waiting:
+            cast: Your vote has been cast.
+            description: The next question will appear here by itself as soon as the organisers open it.
+            title: Waiting for the next question
           already_recorded:
             body: You are only being asked the remaining questions. Receipts for votes already recorded will appear at the end.
             title: Part of your ballot is already recorded
