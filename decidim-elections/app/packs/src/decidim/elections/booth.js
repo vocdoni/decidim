@@ -1,20 +1,17 @@
 import { findVotingBackend } from "src/decidim/elections/voting_backends";
 import { createSubmitStep } from "src/decidim/elections/booth_submit";
 import { createQuestionLoader } from "src/decidim/elections/booth_live";
+import { createReceiptPanels } from "src/decidim/elections/booth_receipt";
 
 /**
  * Client-side booth stepper. Shows one question at a time, then the confirm
  * step, then the receipt. Answers never leave the page except through the
  * voting backend's adapter.
  *
- * The adapter may return `priorReceipts` and `pendingQuestionIds` from
- * `prepare()` when the voter has already cast some questions: in that case the
- * booth presents only the pending questions and combines all receipts at the
- * end. When some questions fail or remain unconfirmed after casting, the submit
- * step (see `booth_submit.js`) shows per-question status with retry/recheck.
- *
- * Questions that open later are added in place: `ctx.loadQuestions(url)`, then
- * `ctx.restart()` runs `prepare()` again (see `booth_live.js`).
+ * `prepare()` may return `priorReceipts` and `pendingQuestionIds` for a partial
+ * ballot: only pending questions are shown and all receipts are combined.
+ * Failed or unconfirmed casts go to the submit step (`booth_submit.js`).
+ * Questions that open later are added in place (`booth_live.js`).
  *
  * @param {HTMLElement} root - the `[data-voting-booth]` element.
  * @returns {Promise<void>} resolves once the booth reached its first step.
@@ -35,35 +32,29 @@ const initBooth = async (root) => {
   const submitStep = root.querySelector("[data-booth-step='submit']");
   const receipt = root.querySelector("[data-booth-step='receipt']");
   const errorStep = root.querySelector("[data-booth-step='error']");
-  const alreadyRecordedBanner = root.querySelector("[data-booth-already-recorded]");
-  const waitingPanel = receipt && receipt.querySelector("[data-booth-waiting]");
-  const receiptHeader = receipt && receipt.querySelector("[data-booth-receipt-header]");
 
   // Questions for this visit (all, or filtered when resuming a partial ballot).
   let activeQuestions = questions;
   // Receipts from questions cast in a prior visit.
   let priorReceipts = [];
 
+  const progress = (msg) => {
+    statusEl.textContent = msg || "";
+  };
+  const receiptPanels = createReceiptPanels({ receipt, banner: root.querySelector("[data-booth-already-recorded]"), progress, i18n });
+
   const show = (section) => {
     // Queried each time: `ctx.loadQuestions` adds question steps.
     root.querySelectorAll("[data-booth-step]").forEach((step) => {
       step.hidden = step !== section;
     });
-    // Navigating away from the receipt hides the waiting panel and restores its header.
-    if (section !== receipt && waitingPanel) {
-      waitingPanel.hidden = true;
-      if (receiptHeader) {
-        receiptHeader.hidden = false;
-      }
+    if (section !== receipt) {
+      receiptPanels.leave();
     }
     const heading = section.querySelector("[tabindex='-1']");
     if (heading) {
       heading.focus();
     }
-  };
-
-  const progress = (msg) => {
-    statusEl.textContent = msg || "";
   };
 
   const fail = (msg) => {
@@ -90,27 +81,7 @@ const initBooth = async (root) => {
 
       return preBallot;
     },
-    // Shows or hides the in-receipt waiting panel (called by the adapter).
-    // true: show the spinner + title + description; false: hide and restore header.
-    // Falls back to the status line when the receipt step is not yet visible (blocked path).
-    waiting: (on) => {
-      if (!waitingPanel) {
-        return;
-      }
-      if (receipt.hidden) {
-        progress(on && i18n.waiting
-          ? i18n.waiting.title
-          : "");
-        return;
-      }
-      waitingPanel.hidden = !on;
-      if (receiptHeader) {
-        receiptHeader.hidden = on;
-      }
-      if (on) {
-        progress("");
-      }
-    }
+    waiting: receiptPanels.waiting
   };
 
   const selected = (section) => Array.from(section.querySelectorAll("input:checked")).map((input) => input.value);
@@ -154,10 +125,7 @@ const initBooth = async (root) => {
     const list = receipt.querySelector("[data-booth-receipts]");
     list.innerHTML = "";
     (receipts || []).forEach((item) => list.append(buildReceiptItem(item)));
-    // hide the "already recorded" banner on the receipt step.
-    if (alreadyRecordedBanner) {
-      alreadyRecordedBanner.hidden = true;
-    }
+    receiptPanels.hideBanner();
     progress("");
     show(receipt);
   };
@@ -214,11 +182,12 @@ const initBooth = async (root) => {
         ? "hidden"
         : "";
     }
-    // last active question's "Next" button shows "Review your vote".
+    // The last question leads to the confirm step, so its button says so.
     const nextLabel = section.querySelector("[data-booth-next-label]");
     if (nextLabel && i18n.review) {
-      const isLast = section === activeQuestions[activeQuestions.length - 1];
-      nextLabel.textContent = isLast ? i18n.review : i18n.next;
+      nextLabel.textContent = section === activeQuestions[activeQuestions.length - 1]
+        ? i18n.review
+        : i18n.next;
     }
     show(section);
   };
@@ -291,11 +260,7 @@ const initBooth = async (root) => {
   begin = async () => {
     activeQuestions = questions;
     priorReceipts = [];
-    // reset the "already recorded" banner at the start of each begin cycle.
-    if (alreadyRecordedBanner) {
-      alreadyRecordedBanner.hidden = true;
-      alreadyRecordedBanner.replaceChildren();
-    }
+    receiptPanels.hideBanner({ clear: true });
     try {
       const state = await adapter.prepare(ctx);
       if (state.alreadyVoted) {
@@ -312,17 +277,7 @@ const initBooth = async (root) => {
         priorReceipts = state.priorReceipts;
         const pendingIds = state.pendingQuestionIds || [];
         activeQuestions = questions.filter((sect) => pendingIds.includes(sect.dataset.questionId));
-
-        if (alreadyRecordedBanner) {
-          const ar = (i18n.already_recorded || {});
-          const heading = document.createElement("h4");
-          heading.className = "font-semibold";
-          heading.textContent = ar.title || "";
-          const para = document.createElement("p");
-          para.textContent = ar.body || "";
-          alreadyRecordedBanner.replaceChildren(heading, para);
-          alreadyRecordedBanner.hidden = false;
-        }
+        receiptPanels.showBanner();
       }
 
       progress("");
