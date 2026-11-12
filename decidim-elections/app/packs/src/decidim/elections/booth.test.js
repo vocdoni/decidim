@@ -312,4 +312,27 @@ describe("ctx.waiting shows and hides the waiting panel", () => {
     ctx.waiting(true);
     expect(document.querySelector("[data-booth-status]").textContent).toBe("");
   });
+
+  it("ctx.waiting(true) shows the waiting title in the status line when receipt is not visible", () => {
+    // Initial state: a question step is shown, receipt is hidden.
+    ctx.waiting(true);
+    expect(document.querySelector("[data-booth-status]").textContent).toBe("Waiting");
+    expect(document.querySelector("[data-booth-waiting]").hidden).toBe(true);
+  });
+
+  it("navigating to a non-receipt step restores the receipt header after waiting was on", async () => {
+    document.querySelector("[data-booth-next]").click();
+    document.querySelector("[data-booth-cast]").click();
+    await flush();
+
+    ctx.waiting(true);
+    expect(document.querySelector("[data-booth-receipt-header]").hidden).toBe(true);
+
+    // Navigate back to a question step via restart with no prior receipts.
+    window.Decidim.votingBackends.fake.prepare.mockResolvedValueOnce({ canVote: true, alreadyVoted: false });
+    await ctx.restart();
+    await flush();
+
+    expect(document.querySelector("[data-booth-receipt-header]").hidden).toBe(false);
+  });
 });

@@ -49,9 +49,10 @@ const initBooth = async (root) => {
     root.querySelectorAll("[data-booth-step]").forEach((step) => {
       step.hidden = step !== section;
     });
-    // Navigating away from the receipt hides the waiting panel automatically.
+    // Navigating away from the receipt hides the waiting panel and restores its header.
     if (section !== receipt && waitingPanel) {
       waitingPanel.hidden = true;
+      if (receiptHeader) { receiptHeader.hidden = false; }
     }
     const heading = section.querySelector("[tabindex='-1']");
     if (heading) {
@@ -89,8 +90,13 @@ const initBooth = async (root) => {
     },
     // Shows or hides the in-receipt waiting panel (called by the adapter).
     // true: show the spinner + title + description; false: hide and restore header.
+    // Falls back to the status line when the receipt step is not yet visible (blocked path).
     waiting: (on) => {
       if (!waitingPanel) {
+        return;
+      }
+      if (on && receipt.hidden) {
+        progress(i18n.waiting && i18n.waiting.title || "");
         return;
       }
       waitingPanel.hidden = !on;
