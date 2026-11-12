@@ -79,7 +79,7 @@ module Decidim
           end
         end
 
-        describe "B3: last published question sets election.published_results_at" do
+        describe "publishing the last question of a per_question election" do
           let(:action) { :publish_results }
 
           context "when this is the last question to publish in a per_question election" do
