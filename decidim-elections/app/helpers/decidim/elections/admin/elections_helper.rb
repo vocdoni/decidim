@@ -53,7 +53,8 @@ module Decidim
           button_to update_question_status_election_path(question.election),
                     method: :put,
                     params: { status_action: "enable_voting", question_id: question.id },
-                    class: "button button__xs button__secondary small" do
+                    class: "button button__xs button__secondary small",
+                    data: { disable: true } do
             t("decidim.elections.admin.dashboard.results.start_question_button")
           end
         end
@@ -71,7 +72,8 @@ module Decidim
                     method: :put,
                     params: { status_action: "publish_results", question_id: question.id },
                     disabled: !question&.publishable_results?,
-                    class: "button button__xs button__secondary small" do
+                    class: "button button__xs button__secondary small",
+                    data: { disable: true } do
             t("decidim.elections.admin.dashboard.results.publish_button")
           end
         end
