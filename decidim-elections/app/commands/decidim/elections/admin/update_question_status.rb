@@ -39,8 +39,8 @@ module Decidim
 
         def already_in_requested_state?
           case action
-          when :enable_voting    then question.voting_enabled_at.present?
-          when :publish_results  then question.published_results_at.present?
+          when :enable_voting then question.voting_enabled_at.present?
+          when :publish_results then question.published_results_at.present?
           end
         end
 
@@ -68,7 +68,7 @@ module Decidim
           return if election.published_results_at?
           return unless election.questions.where(published_results_at: nil).none?
 
-          election.update_columns(published_results_at: Time.current)
+          election.update_columns(published_results_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
         end
       end
     end
