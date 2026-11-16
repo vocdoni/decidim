@@ -37,6 +37,19 @@ describe "Dashboard" do
     expect(div).to have_text("#{count} vote")
   end
 
+  it "says the results update while voting is in progress" do
+    expect(page).to have_css("[data-results-subtitle]", text: "Results are available in real time. You can see the results while voting is in progress.")
+  end
+
+  context "when the real-time election has finished" do
+    let(:election) { create(:election, :published, :finished, :real_time, :with_internal_users_census, :with_questions, skip_injection: true) }
+
+    it "says the election has ended" do
+      expect(page).to have_css("[data-results-subtitle]", text: "The election has ended. You can now see the results.")
+      expect(page).to have_no_text("while voting is in progress")
+    end
+  end
+
   it "shows the results" do
     expect(page).to have_text("Results")
     within "#question-#{question1.id}" do
