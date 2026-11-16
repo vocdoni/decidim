@@ -2,7 +2,8 @@
   <%= icon "bar-chart-2-line", class: "fill-tertiary" %>
   <span><%= t(".title") %></span>
 </h2>
-<div class="mb-4"><%= t(".subtitle.#{election.results_availability}") %></div>
+<%# Once voting has ended, the real-time and per-question copy ("while voting is in progress") no longer holds. %>
+<div class="mb-4" data-results-subtitle><%= t(".subtitle.#{election.finished? ? "after_end" : election.results_availability}") %></div>
 
 <div data-results-live-update="<%= election_path(election) %>">
   <div data-questions-container>
