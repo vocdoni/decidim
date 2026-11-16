@@ -89,7 +89,9 @@ Not set yet:
 
 SSL: Railway terminates TLS. `config.assume_ssl` is on, Decidim turns on
 `force_ssl` in production, and `/up` is exempt from the HTTPS redirect and from
-host authorization so Railway's healthcheck reaches it.
+host authorization so Railway's healthcheck reaches it. Mail is rendered in the
+worker, outside any request, so `config.action_mailer.default_url_options` sets
+`protocol: "https"` (and `HOSTNAME` as host) for the links in it.
 
 ## Deploying
 

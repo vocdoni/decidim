@@ -70,8 +70,12 @@ Rails.application.configure do
   # Set this to true and configure the email server for immediate delivery to raise delivery errors.
   # config.action_mailer.raise_delivery_errors = false
 
-  # Set host to be used by links generated in mailer templates.
-  # config.action_mailer.default_url_options = { host: "example.com" }
+  # Links in mail are built outside a request (Sidekiq), so Rails falls back to
+  # http unless the protocol is set here. Devise mails (confirmation, password
+  # reset, invitation) only pass the organization host. The host mirrors
+  # Decidim::UrlOptionResolver, which Decidim's EngineRouter stops consulting
+  # once these options are present.
+  config.action_mailer.default_url_options = { host: ENV["HOSTNAME"].presence, protocol: "https" }.compact
 
   # Mail goes out over SMTP (settings above) once SMTP_ADDRESS is set. Until
   # then it is discarded rather than retried forever by the worker.
