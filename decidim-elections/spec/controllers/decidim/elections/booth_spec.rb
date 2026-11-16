@@ -50,8 +50,8 @@ module Decidim
         end
 
         after do
-          # Remove the test backend so it does not bleed into other examples.
-          Decidim::Elections.instance_variable_set(:@voting_backends, nil)
+          # Drop only the test backend: resetting the registry would also drop :decidim for later examples.
+          Decidim::Elections.voting_backends.manifests.reject! { |manifest| manifest.name == backend_name }
         end
 
         context "when the voting backend allows vote overwrite" do
@@ -64,6 +64,14 @@ module Decidim
               I18n.t("description", scope: "decidim.elections.votes.receipt")
             )
           end
+
+          it "does not show the final hint on the confirm step" do
+            get(:booth, params:)
+            expect(response).to have_http_status(:ok)
+            expect(response.body).not_to include(
+              I18n.t("final_hint", scope: "decidim.elections.votes.confirm")
+            )
+          end
         end
 
         context "when the voting backend does not allow vote overwrite" do
@@ -74,6 +82,14 @@ module Decidim
             expect(response).to have_http_status(:ok)
             expect(response.body).not_to include(
               I18n.t("description", scope: "decidim.elections.votes.receipt")
+            )
+          end
+
+          it "shows the final hint on the confirm step" do
+            get(:booth, params:)
+            expect(response).to have_http_status(:ok)
+            expect(response.body).to include(
+              I18n.t("final_hint", scope: "decidim.elections.votes.confirm")
             )
           end
         end
