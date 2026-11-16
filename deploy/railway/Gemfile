@@ -8,9 +8,9 @@ ruby RUBY_VERSION
 # either one, change the ref below and run `bundle lock --update <gem>` (see
 # README.md, "Bumping Decidim or the module").
 DECIDIM_REPO = "https://github.com/vocdoni/decidim.git"
-DECIDIM_REF = "demo/integrated-booth"
+DECIDIM_REF = "develop"
 VOCDONI_REPO = "https://github.com/vocdoni/decidim-secure_elections.git"
-VOCDONI_REF = "demo/integrated-booth"
+VOCDONI_REF = "main"
 
 git DECIDIM_REPO, branch: DECIDIM_REF do
   gem "decidim"
