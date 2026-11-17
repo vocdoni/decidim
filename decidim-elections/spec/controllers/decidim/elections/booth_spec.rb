@@ -72,6 +72,12 @@ module Decidim
               I18n.t("final_hint", scope: "decidim.elections.votes.confirm")
             )
           end
+
+          it "ships the stock cast success flash for the receipt step" do
+            get(:booth, params:)
+            expect(response.body).to include("data-booth-cast-flash")
+            expect(response.body).to include(I18n.t("success", scope: "decidim.elections.votes.cast"))
+          end
         end
 
         context "when the voting backend does not allow vote overwrite" do

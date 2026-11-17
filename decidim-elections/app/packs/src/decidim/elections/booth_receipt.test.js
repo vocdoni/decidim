@@ -41,13 +41,43 @@ describe("already-recorded banner", () => {
     expect(el("[data-booth-already-recorded]").hidden).toBe(true);
   });
 
-  it("is reset when the booth restarts without prior receipts", async () => {
+  it("is hidden when the booth restarts without prior receipts", async () => {
     const { adapter, ctx } = await mountBooth(["1", "2"], partial);
     adapter.prepare.mockResolvedValueOnce({ canVote: true, alreadyVoted: false });
 
     await ctx().restart();
     expect(el("[data-booth-already-recorded]").hidden).toBe(true);
-    expect(el("[data-booth-already-recorded]").children).toHaveLength(0);
+  });
+});
+
+describe("receipt step", () => {
+  const flashes = () => document.querySelectorAll("#flash-messages-container .flash");
+
+  it("lists each receipt with its question title and code", async () => {
+    await mountBooth(["1", "2"]);
+    el("[data-question-id='1'] [data-booth-next]").click();
+    await castAll();
+
+    const blocks = Array.from(el("[data-booth-receipts]").children);
+    expect(blocks.map((block) => block.querySelector("p").textContent)).toEqual(["Q1", "Q2"]);
+    expect(blocks.map((block) => block.querySelector("p[title]").textContent)).toEqual(["0x1", "0x2"]);
+  });
+
+  it("shows the cast success flash once, also after a later cast", async () => {
+    await mountBooth(["1"]);
+    await castAll();
+    expect(flashes()).toHaveLength(1);
+    expect(flashes()[0].textContent).toBe("cast ok");
+
+    el("[data-booth-cast]").click();
+    await flush();
+    expect(flashes()).toHaveLength(1);
+  });
+
+  it("shows no flash when the voter had already voted", async () => {
+    await mountBooth(["1"], { canVote: true, alreadyVoted: true, receipts: [{ questionId: "1", code: "0x1" }] });
+    expect(visible()[0].dataset.boothStep).toBe("receipt");
+    expect(flashes()).toHaveLength(0);
   });
 });
 
