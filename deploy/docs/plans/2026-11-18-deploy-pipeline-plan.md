@@ -1823,7 +1823,7 @@ Which acceptance criteria can be proven when:
 
 1. Full checks (z6): lint every new file with the recipe (`<files>` = `.github/workflows/vocdoni_image.yml .github/workflows/vocdoni_gem_bump.yml .github/workflows/vocdoni_release.yml deploy/ci deploy/dev`) and run `bash deploy/ci/gem-bump-check_test.sh` → `actionlint exit 0`, `shellcheck exit 0`, `all passed`. Gem: actionlint on `notify_fork.yml` → exit 0.
 
-2. **Owner OK:** push `feat/deploy-pipeline` and open the PR to `develop` (title `Deploy pipeline: GHCR image, dev updater, gem bump, prod release`, label of the owner's choice). Expect `[Vocdoni] Image` to run as a PR check (build, no push) and pass (AC1): `gh pr checks <n> -R vocdoni/decidim` shows `Build image  pass`. If the build passes 45 minutes or fails in Actions only (cache, runner disk), fix in the PR.
+2. **Owner OK:** push `feat/deploy-pipeline` and open the PR to `develop` (title `Deploy pipeline: GHCR image, dev updater, gem bump, prod release`, label of the owner's choice). Expect `[Vocdoni] Image` to run as a PR check (build, no push) and pass (AC1): `gh pr checks <n> -R vocdoni/decidim` shows `Build image  pass`. If the build exceeds 45 minutes or fails in Actions only (cache, runner disk), fix in the PR.
 
 3. **Owner OK:** merge the PR with a merge commit. The push to `develop` runs `[Vocdoni] Image` and pushes the first image. Check: `gh run list -R vocdoni/decidim -w vocdoni_image.yml -b develop -L 1` → `completed success`; `gh api orgs/vocdoni/packages/container/decidim-vocdoni/versions --jq '.[0].metadata.container.tags'` → `["sha-<12 of the merge commit>","develop"]` (order may vary).
 
@@ -1832,9 +1832,11 @@ Which acceptance criteria can be proven when:
    ssh z6.vocdoni.net 'export DOCKER_CONFIG=$(mktemp -d); docker buildx imagetools inspect ghcr.io/vocdoni/decidim-vocdoni:develop --format "{{json .Manifest}}" | jq -r .digest; docker buildx imagetools inspect ghcr.io/vocdoni/decidim-vocdoni:develop --format "{{json .Image}}" | jq .config.Labels; docker pull -q ghcr.io/vocdoni/decidim-vocdoni:develop'
    ```
    Expected: one `sha256:` digest equal to that of `:sha-<12>`; labels `org.opencontainers.image.revision` = merge commit, `org.opencontainers.image.source` = `https://github.com/vocdoni/decidim`, `io.vocdoni.gem-revision` = 27e582b...; pull succeeds. If the org forbids public packages: stop; the fallback (read-only token on z4, Railway registry credentials) needs the Railway Pro plan, so confirm the workspace plan with the owner first.
+   Rollback: set the package back to private (package settings → Danger Zone → Change visibility).
 
 5. **Owner OK:** create the two labels workflow 2 uses:
    `gh label create "target: developer-experience" -R vocdoni/decidim --color 0E8A16` and `gh label create needs-review -R vocdoni/decidim --color D93F0B`.
+   Rollback: `gh label delete "target: developer-experience" -R vocdoni/decidim --yes` and `gh label delete needs-review -R vocdoni/decidim --yes` (only if unused).
 
 6. **Owner OK (z4 change):** install the dev updater, as `vocdoni` on z4, exactly as `deploy/dev/README.md` "Install" says (the `docker login` step only if the package stayed private; the owner pastes the token, it is never shown here). Then:
    - `decidim-dev-update --record-baseline` → `recorded 753 applied versions without a file ...` (the count may differ if the image's migrations changed; it must be in the hundreds, not 0).
@@ -1851,6 +1853,7 @@ Which acceptance criteria can be proven when:
    - Within a minute `gh run list -R vocdoni/decidim -w vocdoni_gem_bump.yml -L 1 --json event,actor,status` → event `workflow_dispatch`, actor = the token owner (AC10).
    - The run opens `Bump decidim-elections-vocdoni to <sha7 of the gem merge>` (one-line lock diff, no migrations), dispatches `[Vocdoni] Image` on `bot/gem-bump` with push=false, merges after it passes, then dispatches `[Vocdoni] Image` on `develop`; ~10 minutes later `journalctl -u decidim-dev-update` on z4 shows `dev runs decidim-vocdoni-dev:sha-<12 of the bump merge>` (AC5 positive).
    - Check the PR body: commit list present, any `@name` rendered in code, nobody mentioned.
+   Rollback: `gh workflow disable notify_fork.yml -R vocdoni/decidim-secure_elections` (or revert the gem PR), `gh secret delete FORK_DISPATCH_TOKEN -R vocdoni/decidim-secure_elections`, and the owner revokes the fine-grained token.
 
 9. AC8, before any environment exists: tag a commit that is on develop but has no image, and dispatch on it:
    ```bash
@@ -1875,6 +1878,7 @@ Which acceptance criteria can be proven when:
       gh secret set RAILWAY_TOKEN --env production -R vocdoni/decidim   # the owner pastes the token
       ```
       (2815267 = `altergui`.) Check: `gh api repos/vocdoni/decidim/environments/production --jq '.protection_rules'` lists `required_reviewers` with altergui and `prevent_self_review: false`; `.../deployment-branch-policies` lists `prod-*` type `tag`.
+    Rollback: `gh workflow enable on_release.yml -R vocdoni/decidim`; `gh api -X DELETE repos/vocdoni/decidim/environments/production` (removes the environment, its secret and its tag policy); the owner revokes the Railway project token in Project Settings → Tokens.
 
 12. **Owner OK at that moment (first prod release, switches Railway from source builds to the image):**
     - Find the commit dev runs: on z4 `grep DECIDIM_IMAGE_TAG /home/vocdoni/decidim-prod-mode/.env` → `sha-<12>`; resolve it: `gh api repos/vocdoni/decidim/commits/<12> --jq .sha`.
