@@ -1,10 +1,12 @@
 # Deploy pipeline for decidim-dev and decidim.vocdoni.dev: design
 
-Status: draft   Class: architectural
+Status: audited (2026-11-18)   Class: architectural
 Owner decisions so far (2026-11-18): one image built once and promoted dev → prod; `develop`
 deploys to dev automatically; prod deploys from a GitHub Release, behind an approval; release
 names are dates with a prefix (`prod-YYYY.MM.DD`); the gem keeps semver; nothing in the gem
-repository changes (the owner is not admin there).
+repository changes (the owner is not admin there); required reviewer for prod is the owner
+(altergui) only; if the org forbids a public package, the image is private with read-only tokens;
+mechanical gem bumps merge without a human.
 
 ## Problem
 
@@ -33,8 +35,9 @@ Nothing records or enforces what runs where.
    tagged by commit, in GHCR.
 2. Dev runs the newest `develop` image within ~10 minutes of it being built, without anyone
    acting, and stays on the previous image if the new one fails its checks.
-3. A new commit on gem `main` becomes a merged lock bump on fork `develop` within ~30 minutes,
-   without anyone acting, when the bump is mechanical.
+3. A new commit on gem `main` becomes a merged lock bump on fork `develop` without anyone
+   acting, when the bump is mechanical: detection within 5 minutes plus GitHub's schedule delay,
+   then a check build (~6–12 min). Dev runs it ~10 minutes after the merge.
 4. Prod changes only by publishing a GitHub Release `prod-YYYY.MM.DD[.N]` on the fork, which
    promotes the exact image dev ran (no rebuild), after an approval by a required reviewer.
    All five Railway app services move to the same image digest.
@@ -61,8 +64,9 @@ Nothing records or enforces what runs where.
 - Railway: `web` runs `bin/release` (db:migrate, storage CORS, optional bootstrap) as its
   pre-deploy command and has healthcheck `/up`; `worker` runs Sidekiq; the crons run rake tasks
   on schedules (`deploy/railway/README.md`, "What runs where", "Scheduled tasks"). The services
-  build from uploaded source. `.railway/railway.ts` describes the project; variables are not
-  managed there.
+  build from uploaded source. `.railway/railway.ts` describes part of the project (`web`, `worker`, databases,
+  volumes, bucket); the three cron services exist only in Railway and are not in the IaC file —
+  do not `railway config apply` without reconciling that. Variables are not managed there.
 - Gem migrations must be copied into `deploy/railway/db/migrate/` by hand
   (`deploy/railway/README.md`, "Bumping Decidim or the module", step 2).
 - Dev on z4 (`/home/vocdoni/decidim-prod-mode/`): compose project `decidim-dev-prod`, services
@@ -85,8 +89,10 @@ Nothing records or enforces what runs where.
   `org.opencontainers.image.source` (fork URL), and `io.vocdoni.gem-revision` (the gem
   revision read from `Gemfile.lock`).
 - Visibility: public. The image holds no secrets (see Current state); being public lets z4 and
-  Railway pull without credentials. If the org forbids public packages, it stays private and
-  z4 and Railway get a read-only `read:packages` token (fallback, see Open questions).
+  Railway pull without credentials. The org already publishes public container packages
+  (`go-dvote`). If the org forbids public packages, it stays private and z4 gets a read-only
+  `read:packages` token; Railway then needs registry credentials, which Railway only supports on
+  the Pro plan — confirm the workspace plan before choosing this fallback.
 
 ### Workflow 1: build (`.github/workflows/vocdoni_image.yml`)
 
@@ -94,25 +100,43 @@ Nothing records or enforces what runs where.
   (needed because merges made with `GITHUB_TOKEN` do not trigger `push` workflows).
 - Builds `deploy/railway/Dockerfile` with Buildx, layer cache in GHCR
   (`:buildcache`), pushes `sha-<12>` and `develop`. Permissions: `contents: read`,
-  `packages: write`. Concurrency group `image-develop`, newer runs cancel older ones.
+  `packages: write`. Concurrency group `image-${{ github.ref }}`; newer runs cancel older ones
+  within the same ref. `timeout-minutes: 45`.
+- `workflow_dispatch` takes an input `push` (default `true`); with `push: false` it only builds,
+  which is how workflow 2 checks a bump branch before merging it.
 - It is also the PR check: on `pull_request` touching `deploy/railway/**` it builds without
-  pushing, so a broken lock or Dockerfile fails before merge.
+  pushing, so a broken lock or Dockerfile fails before merge. PR builds use `cache-from` only;
+  `cache-to` GHCR is skipped when the token lacks `packages: write` (fork PRs).
 
 ### Workflow 2: gem bump (`.github/workflows/vocdoni_gem_bump.yml`)
 
-- Triggers: `schedule` every 15 minutes and `workflow_dispatch`.
+- Triggers: `schedule` every 5 minutes (GitHub's minimum; scheduled runs can be delayed under
+  load) and `workflow_dispatch`.
 - Reads gem `main` with `git ls-remote` (public, no token) and the pinned revision from
   `deploy/railway/Gemfile.lock`. Equal → exit.
 - Otherwise, on branch `bot/gem-bump`: replace the `revision:` line, run `bundle lock` (no
   `--update`; Ruby 3.4.7, bundler 2.6.9) inside `deploy/railway/`.
 - Mechanical-bump check, all must hold for auto-merge:
   1. `git diff` of `Gemfile.lock` is exactly the one `revision:` line.
-  2. No migration in the gem's `db/migrate/` at the new revision is missing (by name, ignoring
-     the timestamp prefix) from `deploy/railway/db/migrate/`.
-- Opens or updates one PR `chore(deploy): bump decidim-elections-vocdoni to <sha7>` with the
-  gem's commit list in the body. If the check holds: merges it (merge commit), then dispatches
-  workflow 1 on `develop`. If not: leaves the PR open, labelled `needs-review`, with the
-  reason in the body, and does not merge.
+  2. No migration in the gem's `db/migrate/` at the new revision is missing (by base name,
+     ignoring the timestamp prefix and the `.decidim_elections_vocdoni` engine suffix that
+     `install:migrations` appends) from `deploy/railway/db/migrate/`.
+- Opens or updates one PR `Bump decidim-elections-vocdoni to <sha7>` (capitalised and labelled
+  `target: developer-experience`, so the upstream PR lint passes when it runs) with the gem's
+  commit list in the body. If the check holds: dispatches workflow 1 (`workflow_dispatch` on the
+  `bot/gem-bump` ref, `push: false`), waits for its conclusion, and merges (merge commit) only on
+  success, then dispatches workflow 1 on `develop`. On build failure, or if the check does not
+  hold, it leaves the PR open with `needs-review`, the reason and the run link, and does not
+  merge. (PRs opened with `GITHUB_TOKEN` never trigger `pull_request` workflows, so the PR
+  check is dispatched explicitly.)
+- The job that runs `bundle lock` has `permissions: {}` (no token) and uploads the resulting
+  `Gemfile.lock` as an artifact. A second job, which checks out `develop` fresh and never
+  executes gem code, downloads the artifact, verifies the mechanical-bump conditions, and holds
+  the only write-capable token. Gem-repo write access must not transitively grant fork write
+  access.
+- The PR body is written by piping `git log --format` output to a file and passing it with
+  `--body-file`; commit text never appears inside `${{ }}` expressions or interpolated shell
+  strings, and `@` in commit text is escaped (backticks) so no GitHub user is notified.
 - Permissions: `contents: write`, `pull-requests: write`, `actions: write`. Concurrency group
   `gem-bump`, no cancellation.
 
@@ -121,25 +145,39 @@ Nothing records or enforces what runs where.
 - A systemd timer (every 2 minutes) runs `decidim-dev-update`, a shell script that:
   1. Reads the remote digest of `:develop` (`docker buildx imagetools inspect` or the
      registry API) and the digest the running `web` container uses. Equal → exit.
-  2. Pulls the image by digest and tags it locally as `sha-<12>` (from the image's
-     `org.opencontainers.image.revision` label).
-  3. Runs `db:migrate:status` in a one-shot container. If any `down` migration's name already
-     appears among the applied ones (the 2026-11-17 timestamp mismatch), stops and logs an
-     error without deploying.
-  4. Backs up the DB with `pg_dump` (keeps the last 5), runs the `release` service, then
+  2. Pulls the image by digest and tags it locally as `decidim-vocdoni-dev:sha-<12>` (the
+     repository name `compose.yaml` pins; `<12>` from the image's
+     `org.opencontainers.image.revision` label), keeping manual z4 builds interchangeable.
+  3. Runs `db:migrate:status` in a one-shot container. If any `down` migration's base name
+     (ignoring timestamp and engine suffix) already appears among the applied ones (the
+     2026-11-17 timestamp mismatch), stops and logs an error without deploying. The check can
+     only see names of applied migrations whose files exist; `NO FILE` rows are a hard stop too.
+  4. Backs up the DB with `pg_dump -Fc` to `/home/vocdoni/decidim-backups/` (keeps the last 5
+     updater dumps), runs the `release` service, then
      `docker compose up -d web worker` on the new tag.
-  5. Runs `checks.sh` against `http://127.0.0.1:3000` (Host header) and the public URL. On
-     failure, recreates `web` and `worker` on the previous tag and logs an error. Migrations
+  5. Runs the exposure checks against `http://127.0.0.1:3000` (Host header) and the public URL,
+     and fails unless: `/up` and `/en/` return 200, `/letter_opener`, `/rails/info` and
+     `/rails/info/routes` return 404, and the 404 page shows no web-console or application
+     trace. `checks.sh` gains a `--strict` mode that exits non-zero on any violation (today it
+     only prints); the updater calls it with `--strict`. On failure, recreates `web` and
+     `worker` on the previous tag and logs an error. Migrations
      are not reverted (they are additive; the backup is the way back).
-- Writes the running tag and digest to `/home/vocdoni/decidim-prod-mode/.env` and logs every
-  action to the journal. A lock file prevents overlapping runs.
+- The previous tag is read from `.env` before anything changes and kept in the script's state
+  file for the rollback path; `.env` (`DECIDIM_IMAGE_TAG`, plus the digest as a comment) is
+  rewritten only after the checks pass. Every action is logged to the journal. A lock file prevents overlapping runs.
 - `flock`, pinned script in the repo, installed by a documented one-time step; manual deploys
   keep working (`.env` + `docker compose up -d`).
 
 ### Workflow 3: promote to prod (`.github/workflows/vocdoni_release.yml`)
 
 - Triggers: `release: published` (tag must match `prod-*`), and `workflow_dispatch` with input
-  `tag` (an existing `prod-*` tag) for redeploys and rollbacks.
+  `tag` (an existing `prod-*` tag) for redeploys and rollbacks. The dispatch must run on the tag
+  ref itself so it passes the environment's tag policy: `gh workflow run vocdoni_release.yml
+  --ref prod-YYYY.MM.DD[.N] -f tag=prod-YYYY.MM.DD[.N]`. `resolve` fails if
+  `inputs.tag != github.ref_name`. `deploy/railway/README.md` documents this as the rollback
+  command.
+- Permissions: `contents: read`, `packages: write` (for the tag push in step 1; the GHCR login
+  uses `GITHUB_TOKEN`).
 - Job `resolve` (no environment): resolves the tag to a commit, requires that commit to be
   reachable from `develop`, and requires `sha-<12>` to exist in GHCR; reads its digest. Fails
   with a clear message otherwise ("release a commit that dev has built").
@@ -151,8 +189,13 @@ Nothing records or enforces what runs where.
      image source `ghcr.io/vocdoni/decidim-vocdoni@sha256:<digest>`, deploys `web` first and
      waits for `SUCCESS` (its pre-deploy `bin/release` runs migrations), then deploys `worker`
      and waits for `SUCCESS`, then updates the three crons (they run on their schedules).
-  3. Checks: `https://decidim.vocdoni.dev/up` and `/en/` return 200; the deployment's image
-     digest reported by Railway equals the promoted digest for all five services.
+     Status is polled every 10 s with a 15-minute timeout per service (pre-deploy `bin/release`
+     has Railway's own pre-deploy timeout — raise it if a migration is expected to be slow).
+  3. Checks: `https://decidim.vocdoni.dev/up` and `/en/` return 200; for each of the five
+     services, reading back the service instance's source via the API returns exactly the image
+     reference set in step 2 (`ghcr.io/vocdoni/decidim-vocdoni@sha256:<digest>`). Because the
+     source pins the digest, read-back equality is equivalent to digest equality. If the GraphQL
+     schema exposes a deployment image/digest field, the check may additionally compare it.
   4. Writes a job summary: release, commit, gem revision, digest, Railway deployment ids, and
      the previous release (the rollback target).
 - On failure in step 2 or 3 it stops and reports; it does not roll back. Rolling back is
@@ -190,8 +233,10 @@ Nothing records or enforces what runs where.
 
 1. Merge workflows 1 and 2 and the dev updater (disabled) to `develop`. Workflow 1 builds the
    first image. No environment changes yet.
-2. Pre-checks with the owner: org allows a public package (or fallback); Railway account can
-   pull from GHCR; a Railway project token for `production` exists.
+2. Pre-checks with the owner: org allows a public package (or fallback, which needs Railway
+   Pro); a Railway project token for `production` exists. After workflow 1's first push, set
+   the `decidim-vocdoni` container package to public (one-time, package settings; new packages
+   are private by default) and verify an anonymous `docker pull`.
 3. Dev: install the updater on z4, point it at `:develop`. Dev then runs a CI-built image instead
    of a z4-built one. Rollback: disable the timer, set `.env` back to the z4-built tag, `docker
    compose up -d`.
@@ -200,7 +245,9 @@ Nothing records or enforces what runs where.
    `prod-<date>` targeting the commit dev runs. The first run switches the five Railway services
    from source uploads to the image source. Rollback for this step: in Railway, redeploy the last
    source-built deployment of each service (ids recorded in the run summary before switching),
-   or `railway up` from the previous commit as today.
+   or `railway up` from the previous commit as today. Also disable the upstream workflow
+   `On Release` (`on_release.yml`) from the Actions UI (no file change): it fires on every
+   published release and fails in the fork for lack of `DOCKER_WORKFLOW_PAT`.
 6. Update `deploy/railway/README.md` ("Deploying") and the z4 README: manual `railway up` is
    retired; it would switch a service back to source builds.
 
@@ -222,7 +269,9 @@ Nothing records or enforces what runs where.
   SHA. No secret is baked into the image or printed in logs. The z4 updater needs no credential
   if the image is public.
 - **Supply chain**: anyone who can merge to `develop` can reach dev automatically and prod after
-  approval; that is the same trust as today's manual deploys. The scheduled bump only follows
+  approval; merge rights on fork `develop` reach dev automatically, as today; gem-repo write
+  rights reach dev only through the mechanical-bump gate, whose privileged job never executes
+  gem code. The scheduled bump only follows
   gem `main`, whose merge rights are in the same org.
 - **Concurrency**: each workflow has a concurrency group; the z4 updater holds a lock file.
   Two prod releases queue rather than overlap.
@@ -264,8 +313,13 @@ Nothing records or enforces what runs where.
 
 ## Open questions
 
-1. Who besides the owner is a required reviewer for `production`?
-2. If the org does not allow a public package: is a private image with read-only tokens on z4
-   and Railway acceptable?
-3. Is merging mechanical gem bumps without a human acceptable (goal 3), or should every bump
-   wait for a click?
+None. Answered by the owner on 2026-11-18: reviewers = the owner only; private image with
+read-only tokens if the org forbids a public package (needs Railway Pro, see §Image); mechanical
+bumps merge without a human.
+
+## Possible follow-up
+
+- If the owner gets admin on the gem repo, a step there can send `repository_dispatch` to the
+  fork on every push to `main` (token limited to triggering workflows on the fork), cutting the
+  gem→dev latency from up to ~5–25 min of polling to near zero; polling stays as the backstop.
+  Not part of this delivery (non-goal: no gem repo change).
