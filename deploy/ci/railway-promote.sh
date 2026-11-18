@@ -40,14 +40,14 @@ trap 'rm -f "$hdr"' EXIT
 chmod 600 "$hdr"
 printf 'Project-Access-Token: %s\n' "$RAILWAY_TOKEN" > "$hdr"
 
-# Retries apply to mutations too: a duplicated serviceInstanceDeployV2 deploys
-# the same digest twice; if the duplicate supersedes the watched one, wait_for
-# sees REMOVED and the run fails (rerun the workflow).
 # gql <document> <variables JSON>: prints .data, fails on HTTP or GraphQL errors.
+# GQL_NO_RETRY=1 sends it once: a retried serviceInstanceDeployV2 could start a
+# second deployment that supersedes the watched one (rerun the workflow instead).
 gql() {
-  local body resp
+  local body resp retry=(--retry 3 --retry-all-errors)
+  [ "${GQL_NO_RETRY:-0}" = 1 ] && retry=()
   body=$(jq -nc --arg q "$1" --argjson v "$2" '{query: $q, variables: $v}')
-  resp=$(curl -sS --fail-with-body --max-time 60 --retry 3 --retry-all-errors \
+  resp=$(curl -sS --fail-with-body --max-time 60 "${retry[@]}" \
     -H "Content-Type: application/json" -H @"$hdr" --data-binary "$body" "$API") \
     || die "Railway API request failed: $(jq -r '[.errors[]?.message] | join("; ")' <<<"$resp" 2>/dev/null)"
   if jq -e '(.errors // []) | length > 0' <<<"$resp" > /dev/null; then
@@ -128,7 +128,7 @@ for entry in "${services[@]}"; do
   si=$(instance "$id")
   got=$(source_of "$si")
   [ "$got" = "$image" ] || die "$name: source reads back as $got, expected $image"
-  dep=$(gql "$M_DEPLOY" "$(vars "$id")" | jq -r '.serviceInstanceDeployV2')
+  dep=$(GQL_NO_RETRY=1 gql "$M_DEPLOY" "$(vars "$id")" | jq -r '.serviceInstanceDeployV2')
   [ -n "$dep" ] && [ "$dep" != null ] || die "$name: no deployment id returned"
   echo "$name: source set, deployment $dep started"
   wait_for "$name" "$dep"
