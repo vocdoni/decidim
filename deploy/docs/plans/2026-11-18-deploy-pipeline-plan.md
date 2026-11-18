@@ -1899,7 +1899,7 @@ Which acceptance criteria can be proven when:
 15. Close-out: the ledger records the release tag, the digest, the run URLs of steps 2, 3, 8, 12; the z4 README is the installed `deploy/dev/README.md` (step 6). Delete the scratch dirs on z6 (`~/scratch/deploy-pipeline`).
 
 Unverified until the rollout (each fails closed):
-- Railway: whether `serviceInstanceUpdate` with `source.image` applies at once or is staged, whether it starts a deploy by itself, whether a `@sha256:` reference is accepted, and whether a project token may run these mutations. The script reads the source back before deploying and stops on a mismatch; step 10 can prove all four without prod.
+- Railway: whether `serviceInstanceUpdate` with `source.image` applies at once or is staged, whether it starts a deploy by itself, whether a `@sha256:` reference is accepted, and whether a project token may run these mutations. The script reads the source back before deploying and stops on a mismatch; step 10 can prove all four without prod. Also note: `serviceInstanceUpdate` with the id of a non-fork environment updates all non-fork environments (schema description); the project has only `production` today — recheck if an environment is ever added.
 - `docker buildx imagetools create` with one single-manifest source keeps the digest; the workflow verifies both new tags against the digest before any Railway call. If it ever produces an index, replace that step with a registry-API manifest copy.
 - Build time of the image on `ubuntu-24.04` runners (z4 builds take ~5 min; limit 45 min).
 - `gh run list ... --json headSha` finding the dispatched build of `bot/gem-bump` within 2 minutes.
