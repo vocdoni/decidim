@@ -1,0 +1,191 @@
+# Promotes the image dev ran to decidim.vocdoni.dev (Railway), after approval
+# (see deploy/docs/specs/2026-11-18-deploy-pipeline-design.md, "Workflow 3").
+# Triggered by publishing a release `prod-YYYY.MM.DD[.N]`, or for redeploys and
+# rollbacks by a dispatch on the tag itself:
+#   gh workflow run vocdoni_release.yml --ref prod-YYYY.MM.DD -f tag=prod-YYYY.MM.DD
+name: "[Vocdoni] Release to prod"
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "prod-* tag to deploy; run the workflow on that same tag"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: prod-deploy
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/vocdoni/decidim-vocdoni
+  PROD_URL: https://decidim.vocdoni.dev
+  # Railway project decidim-vocdoni, environment production. IDs, not secrets.
+  RAILWAY_ENVIRONMENT_ID: 48a08998-2bc5-4d69-8fba-660fb5e7411f
+  RAILWAY_SERVICES: >-
+    web=5e3f10b6-aa8a-4f52-8615-ee3ea647ba53
+    worker=11e7679d-27b9-489d-ac6c-68258d8feab1
+    cron-15min=c7dec447-2ff6-4f6b-bf86-b46227ef0a56
+    cron-daily=baab6ea5-668d-4002-b9b8-b2711a9c5e3d
+    cron-weekly=46425a81-e6f2-4f2d-8ebc-7324755413d0
+
+jobs:
+  resolve:
+    name: Resolve release
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'prod-')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      tag: ${{ steps.r.outputs.tag }}
+      commit: ${{ steps.r.outputs.commit }}
+      digest: ${{ steps.r.outputs.digest }}
+      gem: ${{ steps.r.outputs.gem }}
+      previous: ${{ steps.r.outputs.previous }}
+    steps:
+      - name: Resolve the tag to a built image
+        id: r
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$*"; exit 1; }
+          if [ "$EVENT" = release ]; then tag=$RELEASE_TAG; else tag=$INPUT_TAG; fi
+          [[ "$tag" =~ ^prod-[0-9]{4}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$ ]] \
+            || fail "tag must look like prod-YYYY.MM.DD or prod-YYYY.MM.DD.N"
+          # The production environment only admits prod-* tag refs.
+          if [ "$GITHUB_REF_TYPE" != tag ] || [ "$GITHUB_REF_NAME" != "$tag" ]; then
+            fail "run on the tag itself: gh workflow run vocdoni_release.yml --ref $tag -f tag=$tag"
+          fi
+          commit=$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq .sha)
+          [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || fail "cannot resolve $tag"
+          status=$(gh api "repos/$GITHUB_REPOSITORY/compare/$commit...develop" --jq .status)
+          case $status in
+            ahead|identical) ;;
+            *) fail "release a commit that dev has built: $tag ($commit) is not on develop" ;;
+          esac
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin > /dev/null
+          ref="$IMAGE:sha-${commit:0:12}"
+          manifest=$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' 2> /dev/null) \
+            || fail "no image $ref: release a commit that dev has built"
+          digest=$(jq -r .digest <<<"$manifest")
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || fail "cannot read the digest of $ref"
+          gem=$(docker buildx imagetools inspect "$IMAGE@$digest" --format '{{json .Image}}' \
+            | jq -r '.config.Labels["io.vocdoni.gem-revision"] // "unknown"')
+          previous=$(git ls-remote --tags --refs "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" 'refs/tags/prod-*' \
+            | sed 's|.*refs/tags/||' | grep -E '^prod-[0-9]{4}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$' | sort -V \
+            | awk -v t="$tag" '$0 == t { exit } { p = $0 } END { print p }')
+          {
+            echo "tag=$tag"
+            echo "commit=$commit"
+            echo "digest=$digest"
+            echo "gem=$gem"
+            echo "previous=$previous"
+          } >> "$GITHUB_OUTPUT"
+          echo "$tag -> $commit -> $IMAGE@$digest (gem $gem); previous release: ${previous:-none}"
+
+  deploy:
+    name: Deploy to Railway
+    needs: resolve
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    environment:
+      name: production
+      url: https://decidim.vocdoni.dev
+    permissions:
+      contents: read
+      packages: write
+    env:
+      TAG: ${{ needs.resolve.outputs.tag }}
+      COMMIT: ${{ needs.resolve.outputs.commit }}
+      DIGEST: ${{ needs.resolve.outputs.digest }}
+      GEM: ${{ needs.resolve.outputs.gem }}
+      PREVIOUS: ${{ needs.resolve.outputs.previous }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Tag the image as the release and prod
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin > /dev/null
+          docker buildx imagetools create --tag "$IMAGE:$TAG" --tag "$IMAGE:prod" "$IMAGE@$DIGEST"
+          for t in "$TAG" prod; do
+            got=$(docker buildx imagetools inspect "$IMAGE:$t" --format '{{json .Manifest}}' | jq -r .digest)
+            [ "$got" = "$DIGEST" ] || { echo "::error::$IMAGE:$t is $got, expected $DIGEST"; exit 1; }
+          done
+
+      - name: Railway services before the deploy
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          set -euo pipefail
+          {
+            echo "| service | source before | latest deployment before |"
+            echo "|---|---|---|"
+          } > "$RUNNER_TEMP/before.md"
+          SUMMARY_FILE=$RUNNER_TEMP/before.md bash deploy/ci/railway-promote.sh check "$IMAGE@$DIGEST"
+
+      - name: Deploy web, worker and the crons
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          set -euo pipefail
+          {
+            echo "| service | deployment | Railway image digest |"
+            echo "|---|---|---|"
+          } > "$RUNNER_TEMP/after.md"
+          SUMMARY_FILE=$RUNNER_TEMP/after.md bash deploy/ci/railway-promote.sh promote "$IMAGE@$DIGEST"
+
+      - name: Check decidim.vocdoni.dev
+        run: |
+          set -euo pipefail
+          for path in /up /en/; do
+            code=000
+            for _ in $(seq 1 12); do
+              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$PROD_URL$path" || true)
+              [ "$code" = 200 ] && break
+              sleep 10
+            done
+            echo "$PROD_URL$path $code"
+            [ "$code" = 200 ] || { echo "::error::$PROD_URL$path returned $code"; exit 1; }
+          done
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Release $TAG"
+            echo
+            echo "- Commit: \`$COMMIT\`"
+            echo "- Gem revision: \`$GEM\`"
+            echo "- Image: \`$IMAGE@$DIGEST\`"
+            if [ -n "$PREVIOUS" ]; then
+              echo "- Previous release (rollback target): \`$PREVIOUS\`, roll back with"
+              echo "  \`gh workflow run vocdoni_release.yml --ref $PREVIOUS -f tag=$PREVIOUS\`"
+            else
+              echo "- Previous release: none"
+            fi
+            echo
+            echo "#### Before"
+            echo
+            cat "$RUNNER_TEMP/before.md" 2> /dev/null || echo "(not read)"
+            echo
+            echo "#### Deployed"
+            echo
+            cat "$RUNNER_TEMP/after.md" 2> /dev/null || echo "(not deployed)"
+          } >> "$GITHUB_STEP_SUMMARY"
