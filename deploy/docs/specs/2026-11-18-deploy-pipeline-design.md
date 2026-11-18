@@ -285,7 +285,7 @@ Nothing records or enforces what runs where.
 - **Supply chain**: anyone who can merge to `develop` can reach dev automatically and prod after
   approval; merge rights on fork `develop` reach dev automatically, as today; gem-repo write
   rights reach dev only through the mechanical-bump gate, whose privileged job never executes
-  gem code. The scheduled bump only follows
+  gem code. The bump only follows
   gem `main`, whose merge rights are in the same org.
 - **Concurrency**: each workflow has a concurrency group; the z4 updater holds a lock file.
   Two prod releases queue rather than overlap.
