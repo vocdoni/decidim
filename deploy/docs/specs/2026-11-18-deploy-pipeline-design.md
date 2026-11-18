@@ -1,10 +1,11 @@
 # Deploy pipeline for decidim-dev and decidim.vocdoni.dev: design
 
-Status: audited (2026-11-18)   Class: architectural
+Status: approved (2026-11-18)   Class: architectural
 Owner decisions so far (2026-11-18): one image built once and promoted dev → prod; `develop`
 deploys to dev automatically; prod deploys from a GitHub Release, behind an approval; release
-names are dates with a prefix (`prod-YYYY.MM.DD`); the gem keeps semver; nothing in the gem
-repository changes (the owner is not admin there); required reviewer for prod is the owner
+names are dates with a prefix (`prod-YYYY.MM.DD`); the gem keeps semver; the gem repository
+gets one workflow that triggers the fork's bump on every push to `main` (the owner is admin
+there); required reviewer for prod is the owner
 (altergui) only; if the org forbids a public package, the image is private with read-only tokens;
 mechanical gem bumps merge without a human.
 
@@ -46,7 +47,8 @@ Nothing records or enforces what runs where.
 
 ## Non-goals
 
-- No change to the gem repository, its CI or its release process.
+- No change to the gem repository beyond the one notify workflow below; its CI and release
+  process stay as they are.
 - No change to upstream Decidim CI workflows in the fork.
 - No staging environment between dev and prod.
 - No change to Railway's databases, buckets, variables or domains.
@@ -140,6 +142,14 @@ Nothing records or enforces what runs where.
 - Permissions: `contents: write`, `pull-requests: write`, `actions: write`. Concurrency group
   `gem-bump`, no cancellation.
 
+### Gem notify (`.github/workflows/notify_fork.yml` in the gem repo)
+
+- Trigger: `push` to `main`. Runs `gh workflow run vocdoni_gem_bump.yml -R vocdoni/decidim
+  --ref develop` with secret `FORK_DISPATCH_TOKEN`: a fine-grained token with only
+  **Actions: write** on `vocdoni/decidim` (it can start workflows, not push code), 1-year
+  expiry. Permissions of the job's own `GITHUB_TOKEN`: `{}`. No checkout, no gem code runs.
+- Failure is harmless: workflow 2's 5-minute schedule picks the commit up anyway.
+
 ### Dev updater on z4 (`deploy/dev/` in the fork, installed on z4)
 
 - A systemd timer (every 2 minutes) runs `decidim-dev-update`, a shell script that:
@@ -226,12 +236,14 @@ Nothing records or enforces what runs where.
 | Railway builds from the release tag (`railway up` in CI) | Dev and prod would run different builds of the same commit; slower prod deploys. |
 | GitHub pushes deploys to z4 | z4 SSH is behind the VPN; a pull-based updater needs no inbound access or deploy key. |
 | Watchtower on z4 for dev | Restarts containers but cannot run migrations first, check, or roll back. |
-| Gem repo notifies the fork (`repository_dispatch`) | Needs a secret in the gem repo, where the owner is not admin; polling a public repo needs none. |
+| `repository_dispatch` from the gem | Needs a token with Contents: write on the fork (can push code); `workflow_dispatch` needs only Actions: write. |
+| Polling only | Up to ~5–25 min of extra latency; kept as the backstop. |
 | Semver tags on the fork | The fork carries 189 upstream `v*` tags; a deploy has no meaningful major/minor. |
 
 ## Compatibility and rollout
 
-1. Merge workflows 1 and 2 and the dev updater (disabled) to `develop`. Workflow 1 builds the
+1. Merge workflows 1 and 2 and the dev updater (disabled) to `develop`; the gem notify workflow
+   goes to gem `main` by its own PR once workflow 2 exists, with the owner creating the token. Workflow 1 builds the
    first image. No environment changes yet.
 2. Pre-checks with the owner: org allows a public package (or fallback, which needs Railway
    Pro); a Railway project token for `production` exists. After workflow 1's first push, set
@@ -299,6 +311,7 @@ Nothing records or enforces what runs where.
   approval prompt.
 - [ ] AC9: The compare link `prod-<last>...develop` lists exactly the commits dev has and prod
   does not.
+- [ ] AC10: A push to gem `main` starts workflow 2 on the fork within a minute (run event `workflow_dispatch`, actor = token owner); with the secret removed, the 5-minute schedule still bumps.
 
 ## Constraints
 
@@ -316,10 +329,3 @@ Nothing records or enforces what runs where.
 None. Answered by the owner on 2026-11-18: reviewers = the owner only; private image with
 read-only tokens if the org forbids a public package (needs Railway Pro, see §Image); mechanical
 bumps merge without a human.
-
-## Possible follow-up
-
-- If the owner gets admin on the gem repo, a step there can send `repository_dispatch` to the
-  fork on every push to `main` (token limited to triggering workflows on the fork), cutting the
-  gem→dev latency from up to ~5–25 min of polling to near zero; polling stays as the backstop.
-  Not part of this delivery (non-goal: no gem repo change).
