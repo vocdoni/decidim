@@ -15,7 +15,7 @@ z4 (see [Install](#install)); this copy in the fork is the reference.
 | `.env` | `DECIDIM_IMAGE_TAG`, the running image `decidim-vocdoni-dev:<tag>`; written by the updater after a deploy passes its checks |
 | `decidim-dev-update` | the updater, installed as `/usr/local/bin/decidim-dev-update` |
 | `decidim-dev-update.service`, `.timer` | systemd units in `/etc/systemd/system/`; the timer runs the updater 2 minutes after the previous run ends |
-| `.update/` | updater state: `lock`, `state` (previous and new tag of the last run — if a run died between the recreate and the `.env` write, `.env` lags the running tag; compare `docker compose ps` with `.env` and rerun the updater), `failed-digest`, `nofile-baseline` |
+| `.update/` | updater state: `lock`, `state` (previous and new tag of the last run — if a run died between the recreate and the `.env` write, `.env` lags the running tag; compare `docker compose ps` with `.env` and set `DECIDIM_IMAGE_TAG` in `.env` to `new_tag` from `state` by hand — a rerun exits early because the running digest already matches), `failed-digest`, `nofile-baseline` |
 | `checks.sh` | exposure/health checks; `--strict` exits 1 on any violation |
 | Postgres / Redis | the devcontainer's `decidim-postgres-1` / `decidim-redis-1` (network `decidim_default`), DB `decidim_development_app_development` |
 | uploads | bind mount of `/home/vocdoni/decidim/development_app/storage` (Active Storage `local`) |
