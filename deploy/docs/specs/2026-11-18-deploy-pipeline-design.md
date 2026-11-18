@@ -37,7 +37,7 @@ Nothing records or enforces what runs where.
 2. Dev runs the newest `develop` image within ~10 minutes of it being built, without anyone
    acting, and stays on the previous image if the new one fails its checks.
 3. A new commit on gem `main` becomes a merged lock bump on fork `develop` without anyone
-   acting, when the bump is mechanical: detection within 5 minutes plus GitHub's schedule delay,
+   acting, when the bump is mechanical: started within a minute by the gem's push,
    then a check build (~6–12 min). Dev runs it ~10 minutes after the merge.
 4. Prod changes only by publishing a GitHub Release `prod-YYYY.MM.DD[.N]` on the fork, which
    promotes the exact image dev ran (no rebuild), after an approval by a required reviewer.
@@ -112,8 +112,9 @@ Nothing records or enforces what runs where.
 
 ### Workflow 2: gem bump (`.github/workflows/vocdoni_gem_bump.yml`)
 
-- Triggers: `schedule` every 5 minutes (GitHub's minimum; scheduled runs can be delayed under
-  load) and `workflow_dispatch`.
+- Trigger: `workflow_dispatch` only, started by the gem notify workflow on every push to gem
+  `main`, or by hand from the Actions tab. No schedule: a polling cron would add hundreds of
+  no-op runs a day to the Actions list.
 - Reads gem `main` with `git ls-remote` (public, no token) and the pinned revision from
   `deploy/railway/Gemfile.lock`. Equal → exit.
 - Otherwise, on branch `bot/gem-bump`: replace the `revision:` line, run `bundle lock` (no
@@ -148,7 +149,8 @@ Nothing records or enforces what runs where.
   --ref develop` with secret `FORK_DISPATCH_TOKEN`: a fine-grained token with only
   **Actions: write** on `vocdoni/decidim` (it can start workflows, not push code), 1-year
   expiry. Permissions of the job's own `GITHUB_TOKEN`: `{}`. No checkout, no gem code runs.
-- Failure is harmless: workflow 2's 5-minute schedule picks the commit up anyway.
+- If a notify run fails, the next push to gem `main` catches up (workflow 2 always compares the
+  lock with the current `main` head); in between, workflow 2 can be run by hand.
 
 ### Dev updater on z4 (`deploy/dev/` in the fork, installed on z4)
 
@@ -237,7 +239,7 @@ Nothing records or enforces what runs where.
 | GitHub pushes deploys to z4 | z4 SSH is behind the VPN; a pull-based updater needs no inbound access or deploy key. |
 | Watchtower on z4 for dev | Restarts containers but cannot run migrations first, check, or roll back. |
 | `repository_dispatch` from the gem | Needs a token with Contents: write on the fork (can push code); `workflow_dispatch` needs only Actions: write. |
-| Polling only | Up to ~5–25 min of extra latency; kept as the backstop. |
+| Polling (scheduled workflow) | Up to ~5–25 min of extra latency and hundreds of no-op runs a day in the Actions list. |
 | Semver tags on the fork | The fork carries 189 upstream `v*` tags; a deploy has no meaningful major/minor. |
 
 ## Compatibility and rollout
@@ -311,7 +313,7 @@ Nothing records or enforces what runs where.
   approval prompt.
 - [ ] AC9: The compare link `prod-<last>...develop` lists exactly the commits dev has and prod
   does not.
-- [ ] AC10: A push to gem `main` starts workflow 2 on the fork within a minute (run event `workflow_dispatch`, actor = token owner); with the secret removed, the 5-minute schedule still bumps.
+- [ ] AC10: A push to gem `main` starts workflow 2 on the fork within a minute (run event `workflow_dispatch`, actor = token owner); running workflow 2 by hand on `develop` bumps to the current gem `main`.
 
 ## Constraints
 
