@@ -125,7 +125,7 @@ log "tagged $LOCAL_REPO:$new_tag (fork $rev)"
 
 # 3. Migration guard. Base name = file name without timestamp, engine suffix, .rb.
 [ -f "$BASELINE" ] || die "no $BASELINE; run decidim-dev-update --record-baseline once"
-status=$(migrate_status "$new_tag") || fail_digest "db:migrate:status failed on $LOCAL_REPO:$new_tag"
+status=$(migrate_status "$new_tag") || die "db:migrate:status failed on $LOCAL_REPO:$new_tag"
 files=$(docker run --rm --entrypoint ls "$LOCAL_REPO:$new_tag" db/migrate) \
   || fail_digest "cannot list db/migrate in $LOCAL_REPO:$new_tag"
 names=$(sed -nE 's/^([0-9]+)_([a-z0-9_]+)(\.[a-z0-9_]+)?\.rb$/\1 \2/p' <<<"$files")
@@ -149,7 +149,7 @@ log "migration guard passed; $pending pending"
 # 4. Backup, release, recreate.
 backup="$BACKUP_DIR/decidim_dev-updater-$(date -u +%Y%m%dT%H%M%SZ)-$new_tag.dump"
 ( umask 077; docker exec "$PG_CONTAINER" pg_dump -U postgres -Fc "$PG_DB" > "$backup" ) \
-  || { rm -f "$backup"; fail_digest "pg_dump failed"; }
+  || { rm -f "$backup"; die "pg_dump failed"; }
 log "backup $backup ($(du -h "$backup" | cut -f1))"
 find "$BACKUP_DIR" -maxdepth 1 -name 'decidim_dev-updater-*.dump' -printf '%f\n' | sort | head -n -"$BACKUP_KEEP" \
   | while IFS= read -r old; do rm -f -- "$BACKUP_DIR/$old"; log "removed old backup $old"; done

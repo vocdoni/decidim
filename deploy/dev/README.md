@@ -37,7 +37,8 @@ workflow push `ghcr.io/vocdoni/decidim-vocdoni:sha-<12>` and move `:develop`. Wi
 
 1. compares the digest of `:develop` with the one the `web` container runs; equal
    means nothing to do. A digest whose deploy failed is skipped until a newer image
-   appears or someone runs `decidim-dev-update --retry`;
+   appears or someone runs `decidim-dev-update --retry`; a failure to read the
+   migration status or to dump the DB is retried on the next tick;
 2. pulls it by digest and tags it `decidim-vocdoni-dev:sha-<12>` (`<12>` from the
    `org.opencontainers.image.revision` label);
 3. runs `db:migrate:status` on the new image and stops without deploying if an

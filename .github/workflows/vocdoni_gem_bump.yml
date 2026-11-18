@@ -5,7 +5,7 @@
 #
 # Two jobs, so gem-repo write access never turns into fork write access:
 # - `lock` runs `bundle lock`, which evaluates the gem's gemspec (gem code),
-#   with no token at all, and hands the lock over as an artifact.
+#   in a throwaway `docker run` container with no token, and hands the lock over as an artifact.
 # - `bump` holds the write token, never runs gem code, and treats the artifact
 #   as untrusted input: gem-bump-check.sh accepts it only if it differs from
 #   develop's lock in exactly the revision line.
@@ -30,8 +30,6 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions: {}
-    container:
-      image: ruby:3.4.7@sha256:779ca68b84fe3804e27f5b7ea5ab001005c708b7236a798c15b860d71cba9d21 # ruby:3.4.7
     outputs:
       changed: ${{ steps.pin.outputs.changed }}
     steps:
@@ -62,14 +60,14 @@ jobs:
 
       - name: bundle lock
         if: steps.pin.outputs.changed == 'true'
-        working-directory: work
-        env:
-          BUNDLE_FROZEN: "false"
-          BUNDLE_DEPLOYMENT: "false"
         run: |
           set -euo pipefail
-          gem install bundler:2.6.9 --no-document
-          bundle _2.6.9_ lock
+          # Gem code (the gemspec) runs only inside this disposable container,
+          # with no runner process to scrape for ACTIONS_RUNTIME_TOKEN.
+          docker run --rm -v "$PWD/work:/work" -w /work \
+            -e BUNDLE_FROZEN=false -e BUNDLE_DEPLOYMENT=false \
+            ruby:3.4.7@sha256:779ca68b84fe3804e27f5b7ea5ab001005c708b7236a798c15b860d71cba9d21 \
+            bash -c 'gem install bundler:2.6.9 --no-document && bundle _2.6.9_ lock'
 
       - name: Upload the lock
         if: steps.pin.outputs.changed == 'true'
