@@ -22,9 +22,13 @@ Railway project `decidim-vocdoni` (workspace Vocdoni, region europe-west4):
 | `Redis`    | Railway Redis (Sidekiq, Action Cable)   | |
 | `uploads`  | Railway bucket (S3-compatible, private) | Active Storage `s3` service |
 
-`.railway/railway.ts` is Railway's infrastructure-as-code description of the
-project (Railway has deprecated `railway.toml`/`railway.json` config-as-code).
-Variables are left unmanaged there because they hold secrets. Applying it with
+`.railway/railway.ts` is Railway's infrastructure-as-code description of part
+of the project (Railway has deprecated `railway.toml`/`railway.json`
+config-as-code): `web`, `worker`, the databases, volumes and the bucket. The
+three cron services exist only in Railway, and the app services run a GHCR
+image (see [Deploying](#deploying)) while the file describes Dockerfile builds,
+so do not `railway config apply` it without reconciling both. Variables are left
+unmanaged there because they hold secrets. Applying it with
 `railway config plan|apply` needs the `railway` npm package, so run it from a
 build host, not from a laptop.
 
@@ -95,19 +99,63 @@ worker, outside any request, so `config.action_mailer.default_url_options` sets
 
 ## Deploying
 
-From this directory, linked to the project (`railway link`, project
-`decidim-vocdoni`, environment `production`):
+All five app services (`web`, `worker`, `cron-15min`, `cron-daily`,
+`cron-weekly`) run one image, `ghcr.io/vocdoni/decidim-vocdoni`, pinned by
+digest. Railway does not build anything; the image is built once by GitHub
+Actions and runs on decidim-dev first.
+
+| Step | What happens |
+|------|--------------|
+| merge to `develop` touching `deploy/railway/` | workflow `[Vocdoni] Image` (`.github/workflows/vocdoni_image.yml`) builds this directory's `Dockerfile` and pushes `sha-<12-char commit>` and `develop` |
+| within ~2 minutes | decidim-dev (z4) runs the new `:develop` image if its checks pass (`deploy/dev/README.md`) |
+| publish a release `prod-YYYY.MM.DD` | workflow `[Vocdoni] Release to prod` (`.github/workflows/vocdoni_release.yml`) waits for approval in the `production` environment |
+| after approval | the image gets the tags `prod-YYYY.MM.DD` and `prod`; `web` deploys first (its pre-deploy `bin/release` runs `db:migrate`), then `worker`, then the crons, each waiting for `SUCCESS` |
+
+The image holds no secrets: assets are precompiled with `SECRET_KEY_BASE_DUMMY=1`
+and every variable comes from Railway at run time. Each build installs gems from
+`Gemfile.lock`, rebuilds the Vocdoni booth adapter
+(`public/vocdoni/booth-adapter.js`) from the pinned module source, copies
+Decidim's npm packages from the pinned Decidim checkout, then runs
+`assets:precompile` (Shakapacker).
+
+Do not `railway up` a service: it uploads source, switches that service back to a
+Railway build, and the five services stop running the same image.
+
+### Releasing
+
+A release names a commit that dev has already run; the image for it is
+`sha-<12-char commit>`, built when the commit landed on `develop`. Names are
+`prod-YYYY.MM.DD`, with `.2`, `.3`, ... for further releases on the same day.
 
 ```bash
-railway up --service web --detach
-railway up --service worker --detach
+# the commit dev runs: journalctl -u decidim-dev-update on z4, or the newest
+# successful [Vocdoni] Image run on develop
+gh release create prod-2026.11.18 --target <commit> --generate-notes
 ```
 
-Each upload builds the Dockerfile on Railway: gems from `Gemfile.lock`, the
-Vocdoni booth adapter (`public/vocdoni/booth-adapter.js`) rebuilt from the
-pinned module source, Decidim's npm packages copied from the pinned Decidim
-checkout, then `assets:precompile` (Shakapacker). `web` runs `bin/release`
-(`db:migrate`) before it takes traffic; `worker` has no release step.
+or from GitHub's UI: "Draft a new release", tag `prod-2026.11.18`, target the
+commit (or `develop` when dev runs its head), "Generate release notes".
+
+The required reviewer approves with "Review deployments" on the run page (or in
+GitHub Mobile). The run fails before asking for approval if the commit is not on
+`develop` or has no `sha-<12>` image. Its summary lists the commit, the gem
+revision, the image digest, the Railway deployments and the previous release.
+
+`prod-<last release>...develop` on GitHub (Compare) lists what dev runs and prod
+does not.
+
+### Rolling back
+
+Run the release workflow again with the previous release tag, on that tag (the
+`production` environment only admits `prod-*` tags), and approve it:
+
+```bash
+gh workflow run vocdoni_release.yml --ref prod-2026.11.17 -f tag=prod-2026.11.17
+```
+
+The same command redeploys the current release. Migrations are not rolled back;
+Postgres backups are below. If GitHub Actions or the Railway API is unavailable,
+redeploy an earlier deployment of each service from the Railway dashboard.
 
 ## First boot
 
@@ -126,8 +174,19 @@ The credentials are kept outside the repository, in
 ## Bumping Decidim or the module
 
 Both come from git and are pinned by branch in the `Gemfile`
-(`DECIDIM_REF`, `VOCDONI_REF`); `Gemfile.lock` holds the exact commits. On a
-build host with Ruby 3.4.7 and Node 24.18 (not on a laptop):
+(`DECIDIM_REF`, `VOCDONI_REF`); `Gemfile.lock` holds the exact commits.
+
+The module follows `vocdoni/decidim-secure_elections` `main` by itself: every push
+there starts the workflow `[Vocdoni] Gem bump`
+(`.github/workflows/vocdoni_gem_bump.yml`), which also runs by hand from the
+Actions tab. It changes the module's `revision:` in `Gemfile.lock`, runs
+`bundle lock`, and opens the PR `Bump decidim-elections-vocdoni to <sha7>`. When
+the lock diff is that one line and no gem migration is missing from `db/migrate/`,
+it builds the image from the PR branch and merges on success; otherwise the PR stays
+open with the label `needs-review` and a comment with the reason.
+
+Decidim bumps, and module bumps that bring migrations or other lock changes, are
+done by hand on a build host with Ruby 3.4.7 and Node 24.18 (not on a laptop):
 
 ```bash
 # 1. move the lock to the branch head (or edit DECIDIM_REF / VOCDONI_REF first)
@@ -139,6 +198,6 @@ bin/rails decidim_elections_vocdoni:install:migrations
 cp -r "$(bundle info --path decidim)/packages" . && npm install && rm -rf packages
 ```
 
-Commit `Gemfile.lock`, `db/migrate/` and `package-lock.json`, then deploy. The
-build fails on purpose (`npm ci`) if Decidim's packages changed and the npm
+Commit `Gemfile.lock`, `db/migrate/` and `package-lock.json` in a PR to `develop`.
+The PR build fails on purpose (`npm ci`) if Decidim's packages changed and the npm
 lockfile was not refreshed.
