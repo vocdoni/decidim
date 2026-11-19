@@ -146,11 +146,13 @@ rollback information), asks for confirmation, deploys, and checks `/up` and
 Railway project token. `prod-<last release>...develop` on GitHub (Compare) lists
 what dev runs and prod does not.
 
-The workflow `[Vocdoni] Release to prod` (`.github/workflows/vocdoni_release.yml`)
-applies a published release itself, after approval in the `production`
-environment. It needs a Railway project token (environment secret
-`RAILWAY_TOKEN`), which only a Railway workspace admin can create, and is disabled
-until one exists: `gh workflow enable vocdoni_release.yml` turns it on.
+Publishing the release runs the workflow `[Vocdoni] Release to prod`
+(`.github/workflows/vocdoni_release.yml`): it checks that the commit is on
+`develop` and has an image, and its summary gives the image digest and the
+command above. It deploys to Railway itself, after approval in the `production`
+environment, once the repository variable `RAILWAY_DEPLOY` is `true` and the
+environment secret `RAILWAY_TOKEN` holds a Railway project token (only a Railway
+workspace admin can create one).
 
 ### Rolling back
 
