@@ -13,14 +13,14 @@ built.
 
 Railway project `decidim-vocdoni` (workspace Vocdoni, region europe-west4):
 
-| Service    | What                                   | Config |
-|------------|----------------------------------------|--------|
-| `web`      | Puma; release step `bin/release` (pre-deploy: `db:migrate`); healthcheck `/up`; custom domain `decidim.vocdoni.dev` | `Dockerfile`, `.railway/railway.ts` |
-| `worker`   | Sidekiq, queues in `config/sidekiq.yml` (`vocdoni` plus Decidim's) | same image, `bundle exec sidekiq -C config/sidekiq.yml` |
+| Service | What | Config |
+| --- | --- | --- |
+| `web` | Puma; release step `bin/release` (pre-deploy: `db:migrate`); healthcheck `/up`; custom domain `decidim.vocdoni.dev` | `Dockerfile`, `.railway/railway.ts` |
+| `worker` | Sidekiq, queues in `config/sidekiq.yml` (`vocdoni` plus Decidim's) | same image, `bundle exec sidekiq -C config/sidekiq.yml` |
 | `cron-15min`, `cron-daily`, `cron-weekly` | Decidim's scheduled rake tasks, one run per trigger (see [Scheduled tasks](#scheduled-tasks)) | same image, start command and cron schedule per service |
 | `Postgres` | Railway Postgres, 50 GB volume, with backups (see [Backups](#backups)) | |
-| `Redis`    | Railway Redis (Sidekiq, Action Cable)   | |
-| `uploads`  | Railway bucket (S3-compatible, private) | Active Storage `s3` service |
+| `Redis` | Railway Redis (Sidekiq, Action Cable) | |
+| `uploads` | Railway bucket (S3-compatible, private) | Active Storage `s3` service |
 
 `.railway/railway.ts` is Railway's infrastructure-as-code description of part
 of the project (Railway has deprecated `railway.toml`/`railway.json`
@@ -50,7 +50,7 @@ exit; `restartPolicyType` is `NEVER`, so a failed run waits for the next
 trigger. They replace the system crontab a Decidim host would have.
 
 | Service | Schedule | Start command |
-|---------|----------|---------------|
+| --------- | ---------- | --------------- |
 | `cron-15min` | `*/15 * * * *` | `bundle exec rails decidim_participatory_processes:change_active_step` |
 | `cron-daily` | `5 0 * * *` | `bundle exec rails decidim:delete_download_your_data_files decidim:open_data:export decidim_meetings:clean_registration_forms decidim:reminders:all decidim:mailers:notifications_digest_daily decidim:participants:delete_inactive_participants` |
 | `cron-weekly` | `5 0 * * 6` | `bundle exec rails decidim:mailers:notifications_digest_weekly` |
@@ -70,7 +70,7 @@ Set on `web`, `worker` and the cron services (secret values never live in this
 repository):
 
 | Name | Value |
-|------|-------|
+| ------ | ------- |
 | `SECRET_KEY_BASE` | 128 hex chars from a CSPRNG (`openssl rand -hex 64`); same on both services |
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
 | `REDIS_URL` | `${{Redis.REDIS_URL}}` |
@@ -105,7 +105,7 @@ digest. Railway does not build anything; the image is built once by GitHub
 Actions and runs on decidim-dev first.
 
 | Step | What happens |
-|------|--------------|
+| ------ | -------------- |
 | merge to `develop` touching `deploy/railway/` | workflow `[Vocdoni] Image` (`.github/workflows/vocdoni_image.yml`) builds this directory's `Dockerfile` and pushes `sha-<12-char commit>` and `develop` |
 | within ~2 minutes | decidim-dev (z4) runs the new `:develop` image if its checks pass (`deploy/dev/README.md`) |
 | publish a release `prod-YYYY.MM.DD`, then run `deploy/railway/deploy-prod.sh prod-YYYY.MM.DD` | the five services point at that commit's image by digest; `web` deploys first (its pre-deploy `bin/release` runs `db:migrate`), then `worker`, then the crons, each waiting for `SUCCESS` |

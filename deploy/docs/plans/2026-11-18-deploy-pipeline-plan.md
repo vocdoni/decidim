@@ -1,22 +1,28 @@
 # Deploy pipeline for decidim-dev and decidim.vocdoni.dev: implementation plan
 
+<!-- markdownlint-disable MD046 -- task steps quote whole files as indented blocks -->
+
 Spec: deploy/docs/specs/2026-11-18-deploy-pipeline-design.md (approved 2026-11-18; audit folded in: .delivery/2026-11-18-deploy-pipeline/audit-spec.md)
 Class: architectural
 Repos and branches:
+
 - Fork /home/user/src/vd/decidim-deploy-bump (github.com/vocdoni/decidim) → feat/deploy-pipeline (base develop 45a9119960; spec commits up to d9be3dc6a4; plan tasks commit on top)
 - Gem github.com/vocdoni/decidim-secure_elections, worktree /home/user/src/vd/decidim-secure_elections-notify-fork → feat/notify-fork (base origin/main 27e582bacbc911d36c6edd620228b1d0754e109b)
 
 ## Global Constraints
+
 - Commit convention: conventional commits (`ci(deploy): ...`, `feat(deploy): ...`, `docs(deploy): ...`), English, no AI attribution and no `Co-Authored-By` trailer of any kind.
 - Never push, never open PRs; the controller does. Commit with explicit paths only (`git commit -m ... -- <paths>`); never `git add -A`.
 - Never build, test or lint on the laptop. Lint and the shell test run on z6 (`ssh z6.vocdoni.net`, scratch dir `~/scratch/deploy-pipeline/`, Docker available). Docker image builds are not run by implementers; they are proven in GitHub Actions after the push.
 - Lint recipe (used by every task; `<files>` = the task's files, paths relative to the repo root):
+
   ```bash
   R=/home/user/src/vd/decidim-deploy-bump   # gem task: R=/home/user/src/vd/decidim-secure_elections-notify-fork
   tar -C "$R" -cf - <files> | ssh z6.vocdoni.net 'd=~/scratch/deploy-pipeline/lint; rm -rf "$d"; mkdir -p "$d"; tar -x -C "$d"'
   ssh z6.vocdoni.net 'cd ~/scratch/deploy-pipeline/lint && docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -no-color <workflow files>; echo "actionlint exit $?"'
   ssh z6.vocdoni.net 'cd ~/scratch/deploy-pipeline/lint && docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 <shell files>; echo "shellcheck exit $?"'
   ```
+
   Expected: no findings, `actionlint exit 0` / `shellcheck exit 0`. All file contents in this plan passed this on z6 on 2026-11-18.
 - File contents in this plan are complete and exact; write them verbatim (no reformatting, no added comments). Shell scripts are committed with mode 755 (`chmod 755` before committing; check with `git ls-files -s <path>` → `100755`).
 - Never print secrets: z4 `dev.env`, Railway variables, `RAILWAY_TOKEN`, `FORK_DISPATCH_TOKEN`, any GHCR token. Never read `dev.env`.
@@ -25,6 +31,7 @@ Repos and branches:
 - Prod (decidim.vocdoni.dev, Railway project `decidim-vocdoni`) and z4 are not touched by any task. Every change to them is a rollout step in "Merge and release", with the owner's OK at that moment.
 
 ## Review Focus
+
 - Privilege split in `.github/workflows/vocdoni_gem_bump.yml`: job `lock` (`permissions: {}`, container, runs gem code via `bundle lock`) versus job `bump` (write token, never runs gem code). `bump` must use nothing from `lock` except `outputs.changed` and the artifact, and the artifact is accepted only through `deploy/ci/gem-bump-check.sh`.
 - Injection points: gem commit text reaches only `$RUNNER_TEMP/body.md` through `git log | sed` (backticks stripped, `@` wrapped, `#N` qualified) and `--body-file`; tag names in `vocdoni_release.yml` go through `env:` and a regex before use; no `${{ }}` of event text inside `run:`.
 - `vocdoni_image.yml`: `:develop` and `sha-<12>` are pushed only when `github.ref == refs/heads/develop`, whatever the dispatch input says.
@@ -44,8 +51,9 @@ Repos and branches:
 8. **`#N` in gem commit subjects** is rewritten to `vocdoni/decidim-secure_elections#N`, so PR bodies link the gem PR instead of a fork PR with the same number (GitHub adds a cross-reference on the gem PR).
 
 ## Task order and parallelism
+
 | Task | Depends on | Repo/files | May run in parallel with |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 1 Image workflow | none | fork: `.github/workflows/vocdoni_image.yml` | 5 |
 | 2 Gem bump workflow | none (calls task 1's workflow by name) | fork: `.github/workflows/vocdoni_gem_bump.yml`, `deploy/ci/gem-bump-check.sh`, `deploy/ci/gem-bump-check_test.sh` | 5 |
 | 3 Dev updater files | none | fork: `deploy/dev/*` | 5 |
@@ -58,10 +66,12 @@ Tasks 1–4 and 6 share one worktree and branch: run them one after another (any
 ## Tasks
 
 ### Task 1: image build and PR check workflow
+
 Model: standard   Repo: /home/user/src/vd/decidim-deploy-bump   Files: `.github/workflows/vocdoni_image.yml`
 Goal: build `deploy/railway/` once per develop commit and push `sha-<12>` + `:develop` with the three labels; build without pushing on PRs and on dispatch with `push: false` (AC1, AC2).
 
 Step 1: write `.github/workflows/vocdoni_image.yml`:
+
 ```yaml
 # Builds the decidim.vocdoni.dev image from deploy/railway/ (see
 # deploy/docs/specs/2026-11-18-deploy-pipeline-design.md, "Workflow 1").
@@ -196,10 +206,12 @@ Step 3: commit
 Interfaces this task provides to later tasks: workflow file name `vocdoni_image.yml`; `workflow_dispatch` input `push` (boolean, default `true`, honoured only on `refs/heads/develop`); image `ghcr.io/vocdoni/decidim-vocdoni` with tags `sha-<first 12 of the fork commit>`, `develop`, cache tag `buildcache`; labels `org.opencontainers.image.revision`, `org.opencontainers.image.source`, `io.vocdoni.gem-revision`; single-platform `linux/amd64` manifest (no index).
 
 ### Task 2: gem bump workflow with the two-job privilege split
+
 Model: strong   Repo: /home/user/src/vd/decidim-deploy-bump   Files: `.github/workflows/vocdoni_gem_bump.yml`, `deploy/ci/gem-bump-check.sh`, `deploy/ci/gem-bump-check_test.sh`
 Goal: on dispatch, bump the module's lock revision to gem `main`, open/update one PR, and merge it only when the bump is mechanical and the image builds (AC5, AC10).
 
 Step 1: write the failing test `deploy/ci/gem-bump-check_test.sh` (mode 755):
+
 ```bash
 #!/usr/bin/env bash
 # Tests for gem-bump-check.sh. Run: bash deploy/ci/gem-bump-check_test.sh
@@ -274,15 +286,19 @@ if [ "$fails" -ne 0 ]; then
 fi
 echo "all passed"
 ```
+
 Run on z6 (the checker does not exist yet):
+
 ```bash
 R=/home/user/src/vd/decidim-deploy-bump
 tar -C "$R" -cf - deploy/ci | ssh z6.vocdoni.net 'd=~/scratch/deploy-pipeline/lint; rm -rf "$d"; mkdir -p "$d"; tar -x -C "$d"'
 ssh z6.vocdoni.net 'cd ~/scratch/deploy-pipeline/lint && bash deploy/ci/gem-bump-check_test.sh'
 ```
+
 Expected: seven `FAIL ...` lines (exit 127 from the missing script) and `7 failed`.
 
 Step 2: write `deploy/ci/gem-bump-check.sh` (mode 755):
+
 ```bash
 #!/usr/bin/env bash
 # Mechanical-bump check for the decidim-elections-vocdoni lock bump (workflow
@@ -354,9 +370,11 @@ if [ ${#reasons[@]} -gt 0 ]; then
 fi
 echo "mechanical: one revision line, no new migrations"
 ```
+
 Run the same two commands as in step 1.
 Expected:
-```
+
+```text
 ok   mechanical
 ok   extra-lock-change
 ok   wrong-block-changed
@@ -368,6 +386,7 @@ all passed
 ```
 
 Step 3: write `.github/workflows/vocdoni_gem_bump.yml`:
+
 ```yaml
 # Bumps decidim-elections-vocdoni in deploy/railway/Gemfile.lock to the head of
 # vocdoni/decidim-secure_elections main (see
@@ -643,12 +662,14 @@ Step 5: commit
 Interfaces this task provides to later tasks: workflow file name `vocdoni_gem_bump.yml` (dispatch on `develop`, no inputs; task 5 calls it); branch `bot/gem-bump`; PR title `Bump decidim-elections-vocdoni to <sha7>`; labels `target: developer-experience`, `needs-review` (must exist in the fork, see rollout); `deploy/ci/gem-bump-check.sh <base-lock> <new-lock> <gem-sha> <app-migrate-dir> <gem-migrations-list>` → exit 0 mechanical / 1 not (reasons on stdout) / 2 bad input.
 
 ### Task 3: dev updater on z4 (files only)
+
 Model: strong   Repo: /home/user/src/vd/decidim-deploy-bump   Files: `deploy/dev/README.md`, `deploy/dev/compose.yaml`, `deploy/dev/checks.sh`, `deploy/dev/decidim-dev-update`, `deploy/dev/decidim-dev-update.service`, `deploy/dev/decidim-dev-update.timer`
 Goal: version the z4 host files and add the pull-based updater with strict checks and rollback (AC3, AC4). Nothing is installed on z4 by this task.
 
 `compose.yaml` is the z4 file as of 2026-11-18 with three added comment lines (services unchanged); `checks.sh` keeps the z4 output lines and adds `--strict`.
 
 Step 1: write `deploy/dev/checks.sh` (mode 755):
+
 ```bash
 #!/usr/bin/env bash
 # Exposure and health checks for decidim-dev.vocdoni.net (z4).
@@ -715,6 +736,7 @@ exit 0
 ```
 
 Step 2: write `deploy/dev/decidim-dev-update` (mode 755):
+
 ```bash
 #!/usr/bin/env bash
 # decidim-dev-update: moves decidim-dev.vocdoni.net (z4, compose project
@@ -910,6 +932,7 @@ log "dev runs $LOCAL_REPO:$new_tag ($IMAGE@$remote)"
 ```
 
 Step 3: write `deploy/dev/decidim-dev-update.service`:
+
 ```ini
 [Unit]
 Description=Move decidim-dev.vocdoni.net to the newest ghcr.io/vocdoni/decidim-vocdoni:develop image
@@ -927,7 +950,9 @@ SyslogIdentifier=decidim-dev-update
 # pg_dump, db:migrate, two health waits and the checks.
 TimeoutStartSec=45min
 ```
+
 and `deploy/dev/decidim-dev-update.timer`:
+
 ```ini
 [Unit]
 Description=Check for a new decidim-dev image every 2 minutes
@@ -943,6 +968,7 @@ WantedBy=timers.target
 ```
 
 Step 4: write `deploy/dev/compose.yaml`:
+
 ```yaml
 # decidim-dev.vocdoni.net on z4: the Railway production image (deploy/railway
 # of vocdoni/decidim develop) in RAILS_ENV=production, with dev env vars.
@@ -1186,12 +1212,14 @@ Step 7: commit
 Interfaces this task provides to later tasks: `checks.sh [--strict] <base-url> [curl args...]`; `decidim-dev-update [--ref <tag>] [--force-fail] [--retry]` and `--record-baseline`; units `decidim-dev-update.service` / `.timer`; state in `/home/vocdoni/decidim-prod-mode/.update/`; dumps `/home/vocdoni/decidim-backups/decidim_dev-updater-*.dump`.
 
 ### Task 4: promote-to-prod workflow and the Railway API script
+
 Model: strong   Repo: /home/user/src/vd/decidim-deploy-bump   Files: `.github/workflows/vocdoni_release.yml`, `deploy/ci/railway-promote.sh`
 Goal: on a `prod-*` release (or a dispatch on that tag), after approval, retag the dev-built image and move all five Railway app services to its digest, web first (AC6, AC7, AC8).
 
 Railway facts used here (read-only introspection with `railway api describe`, 2026-11-18): endpoint `https://backboard.railway.com/graphql/v2`, header `Project-Access-Token`; `serviceInstanceUpdate(serviceId, environmentId, input: ServiceInstanceUpdateInput!): Boolean!` with `input.source: ServiceSourceInput {image, repo}`; `serviceInstanceDeployV2(serviceId, environmentId, commitSha): String!` returns the deployment id; `serviceInstance(serviceId, environmentId) { source { image repo } latestDeployment { id status meta } }`; `deployment(id) { status meta }`, `meta.imageDigest` present; `DeploymentStatus` = BUILDING CRASHED DEPLOYING FAILED INITIALIZING NEEDS_APPROVAL QUEUED REMOVED REMOVING SKIPPED SLEEPING SUCCESS WAITING; `projectToken { projectId environmentId }`. IDs: environment `production` 48a08998-2bc5-4d69-8fba-660fb5e7411f; services web 5e3f10b6-aa8a-4f52-8615-ee3ea647ba53, worker 11e7679d-27b9-489d-ac6c-68258d8feab1, cron-15min c7dec447-2ff6-4f6b-bf86-b46227ef0a56, cron-daily baab6ea5-668d-4002-b9b8-b2711a9c5e3d, cron-weekly 46425a81-e6f2-4f2d-8ebc-7324755413d0.
 
 Step 1: write `deploy/ci/railway-promote.sh` (mode 755):
+
 ```bash
 #!/usr/bin/env bash
 # Points Railway services at one container image (by digest) and deploys them
@@ -1343,6 +1371,7 @@ echo "all services run $image"
 ```
 
 Step 2: write `.github/workflows/vocdoni_release.yml`:
+
 ```yaml
 # Promotes the image dev ran to decidim.vocdoni.dev (Railway), after approval
 # (see deploy/docs/specs/2026-11-18-deploy-pipeline-design.md, "Workflow 3").
@@ -1548,17 +1577,21 @@ Step 4: commit
 Interfaces this task provides to later tasks: workflow `vocdoni_release.yml` (release `published` with a `prod-*` tag; dispatch `--ref <tag> -f tag=<tag>`); environment `production` with secret `RAILWAY_TOKEN`; `railway-promote.sh check|promote <image@sha256:digest>` with env `RAILWAY_TOKEN`, `RAILWAY_ENVIRONMENT_ID`, `RAILWAY_SERVICES`, optional `SUMMARY_FILE`, `POLL_INTERVAL`, `POLL_TIMEOUT`, `RAILWAY_API`.
 
 ### Task 5: gem notify workflow
+
 Model: fast   Repo: /home/user/src/vd/decidim-secure_elections-notify-fork   Files: `.github/workflows/notify_fork.yml`
 Goal: every push to gem `main` dispatches the fork's `vocdoni_gem_bump.yml` on `develop` (AC10).
 
 Step 0: create the worktree (the main clone is on another branch; do not touch it):
+
 ```bash
 git -C /home/user/src/vd/decidim-secure_elections fetch origin
 git -C /home/user/src/vd/decidim-secure_elections worktree add /home/user/src/vd/decidim-secure_elections-notify-fork -b feat/notify-fork 27e582bacbc911d36c6edd620228b1d0754e109b
 ```
+
 Expected: `Preparing worktree (new branch 'feat/notify-fork')`. If `origin/main` is no longer 27e582b, stop and report it to the controller.
 
 Step 1: write `.github/workflows/notify_fork.yml`:
+
 ```yaml
 # Starts the lock bump in vocdoni/decidim (workflow vocdoni_gem_bump.yml) on
 # every push to main, so a new gem commit reaches decidim-dev without anyone
@@ -1600,6 +1633,7 @@ Step 3: commit
 Interfaces this task provides to later tasks: repository secret `FORK_DISPATCH_TOKEN` (created by the owner in the rollout).
 
 ### Task 6: Railway README, deploying, releasing and rolling back
+
 Model: standard   Repo: /home/user/src/vd/decidim-deploy-bump   Files: `deploy/railway/README.md`
 Goal: document the pipeline as the way prod and dev change, the release naming rule and the rollback command (spec §Cutting a release, §Compatibility and rollout step 6).
 
@@ -1817,6 +1851,7 @@ Step 2: commit (this also makes the merge build an image: the PR touches `deploy
 <!-- Not copied into briefs; the controller executes this after the gate audit. It is the rollout of spec §Compatibility and rollout. -->
 
 Which acceptance criteria can be proven when:
+
 - Before merge (on the fork PR): AC1 only. `pull_request` runs the workflow file from the PR, but `workflow_dispatch` (workflow 2 dispatching workflow 1, the gem dispatching workflow 2, release dispatches) only works once the file is on `develop`, the default branch.
 - After merge to develop: AC2 (first push build), AC3/AC4 (z4 install), AC10 + AC5 positive (gem notify merge), AC8 (test tag), AC6/AC9 (first release), AC7 (second release or a redeploy).
 - AC5 negative (extra lock change, new migration) is proven by `gem-bump-check_test.sh` on z6 and, in production use, by the first real gem migration; no fake commit is pushed to gem `main` for it.
@@ -1828,9 +1863,11 @@ Which acceptance criteria can be proven when:
 3. **Owner OK:** merge the PR with a merge commit. The push to `develop` runs `[Vocdoni] Image` and pushes the first image. Check: `gh run list -R vocdoni/decidim -w vocdoni_image.yml -b develop -L 1` → `completed success`; `gh api orgs/vocdoni/packages/container/decidim-vocdoni/versions --jq '.[0].metadata.container.tags'` → `["sha-<12 of the merge commit>","develop"]` (order may vary).
 
 4. **Owner OK (org/package admin):** decide the package visibility. Default: set `ghcr.io/vocdoni/decidim-vocdoni` to public (package settings → Danger Zone → Change visibility). Then on z6, anonymously (AC2):
+
    ```bash
    ssh z6.vocdoni.net 'export DOCKER_CONFIG=$(mktemp -d); docker buildx imagetools inspect ghcr.io/vocdoni/decidim-vocdoni:develop --format "{{json .Manifest}}" | jq -r .digest; docker buildx imagetools inspect ghcr.io/vocdoni/decidim-vocdoni:develop --format "{{json .Image}}" | jq .config.Labels; docker pull -q ghcr.io/vocdoni/decidim-vocdoni:develop'
    ```
+
    Expected: one `sha256:` digest equal to that of `:sha-<12>`; labels `org.opencontainers.image.revision` = merge commit, `org.opencontainers.image.source` = `https://github.com/vocdoni/decidim`, `io.vocdoni.gem-revision` = 27e582b...; pull succeeds. If the org forbids public packages: stop; the fallback (read-only token on z4, Railway registry credentials) needs the Railway Pro plan, so confirm the workspace plan with the owner first.
    Rollback: set the package back to private (package settings → Danger Zone → Change visibility).
 
@@ -1857,11 +1894,13 @@ Which acceptance criteria can be proven when:
    Rollback: `gh workflow disable notify_fork.yml -R vocdoni/decidim-secure_elections` (or revert the gem PR), `gh secret delete FORK_DISPATCH_TOKEN -R vocdoni/decidim-secure_elections`, and the owner revokes the fine-grained token.
 
 9. AC8, before any environment exists: tag a commit that is on develop but has no image, and dispatch on it:
+
    ```bash
    T=prod-2000.01.01; C=$(git -C /home/user/src/vd/decidim-deploy-bump rev-parse feat/deploy-pipeline)   # the PR head: on develop after the merge, never built (only the merge commit was)
    gh api repos/vocdoni/decidim/git/refs -f ref=refs/tags/$T -f sha=$C
    gh workflow run vocdoni_release.yml -R vocdoni/decidim --ref $T -f tag=$T
    ```
+
    **Owner OK** for the test tag. Expected: job `Resolve release` fails with `no image ghcr.io/vocdoni/decidim-vocdoni:sha-<12>: release a commit that dev has built`; job `Deploy to Railway` never starts (no approval prompt, no environment yet). Then delete the tag: `gh api -X DELETE repos/vocdoni/decidim/git/refs/tags/$T`.
 
 10. Optional, **owner OK**: rehearse the Railway mutations on a throwaway Railway project (one service from a public image, its own project token): run `deploy/ci/railway-promote.sh check|promote <public-image@sha256:...>` on z6 with `RAILWAY_ENVIRONMENT_ID` / `RAILWAY_SERVICES` of that project, then delete the project. It proves the unverified points below (digest refs as image source, project-token rights, whether `serviceInstanceUpdate` is applied at once or staged) without touching prod.
@@ -1870,6 +1909,7 @@ Which acceptance criteria can be proven when:
     - Disable the upstream `On Release` workflow (no file change): `gh workflow disable on_release.yml -R vocdoni/decidim`.
     - Railway: the owner creates a project token in project `decidim-vocdoni`, environment `production` (Project Settings → Tokens). It is never shown in chat or logs.
     - GitHub environment `production`:
+
       ```bash
       gh api -X PUT repos/vocdoni/decidim/environments/production --input - <<'EOF'
       {"reviewers":[{"type":"User","id":2815267}],"prevent_self_review":false,
@@ -1878,6 +1918,7 @@ Which acceptance criteria can be proven when:
       gh api -X POST repos/vocdoni/decidim/environments/production/deployment-branch-policies -f name='prod-*' -f type=tag
       gh secret set RAILWAY_TOKEN --env production -R vocdoni/decidim   # the owner pastes the token
       ```
+
       (2815267 = `altergui`.) Check: `gh api repos/vocdoni/decidim/environments/production --jq '.protection_rules'` lists `required_reviewers` with altergui and `prevent_self_review: false`; `.../deployment-branch-policies` lists `prod-*` type `tag`.
     Rollback: `gh workflow enable on_release.yml -R vocdoni/decidim`; `gh api -X DELETE repos/vocdoni/decidim/environments/production` (removes the environment, its secret and its tag policy); the owner revokes the Railway project token in Project Settings → Tokens.
 
@@ -1886,9 +1927,11 @@ Which acceptance criteria can be proven when:
     - `gh release create prod-YYYY.MM.DD -R vocdoni/decidim --target <commit> --generate-notes`.
     - The run waits for approval; the owner approves ("Review deployments"). Watch: `gh run watch <id> -R vocdoni/decidim --exit-status`.
     - AC6: run succeeds; its summary has the "Before" table (source `(uploaded source)` and the last source-built deployment id of each service: these ids are the rollback of this step) and the "Deployed" table with five deployment ids; `curl -s -o /dev/null -w '%{http_code}\n' https://decidim.vocdoni.dev/up` and `/en/` → `200`; read-only read-back of the five sources:
+
       ```bash
       for s in 5e3f10b6-aa8a-4f52-8615-ee3ea647ba53 11e7679d-27b9-489d-ac6c-68258d8feab1 c7dec447-2ff6-4f6b-bf86-b46227ef0a56 baab6ea5-668d-4002-b9b8-b2711a9c5e3d 46425a81-e6f2-4f2d-8ebc-7324755413d0; do railway api --compact "query { serviceInstance(environmentId: \"48a08998-2bc5-4d69-8fba-660fb5e7411f\", serviceId: \"$s\") { serviceName source { image } latestDeployment { status } } }"; done
       ```
+
       → each `source.image` = `ghcr.io/vocdoni/decidim-vocdoni@<digest>`, status `SUCCESS`.
     - `docker buildx imagetools inspect ghcr.io/vocdoni/decidim-vocdoni:prod` (z6) → same digest.
     - Rollback of this step: in Railway, redeploy each service's last source-built deployment from the "Before" table (dashboard, or `deploymentRedeploy`), or `railway up` from the previous commit as before; then delete the release if needed.
@@ -1900,6 +1943,7 @@ Which acceptance criteria can be proven when:
 15. Close-out: the ledger records the release tag, the digest, the run URLs of steps 2, 3, 8, 12; the z4 README is the installed `deploy/dev/README.md` (step 6). Delete the scratch dirs on z6 (`~/scratch/deploy-pipeline`).
 
 Unverified until the rollout (each fails closed):
+
 - Railway: whether `serviceInstanceUpdate` with `source.image` applies at once or is staged, whether it starts a deploy by itself, whether a `@sha256:` reference is accepted, and whether a project token may run these mutations. The script reads the source back before deploying and stops on a mismatch; step 10 can prove all four without prod. Also note: `serviceInstanceUpdate` with the id of a non-fork environment updates all non-fork environments (schema description); the project has only `production` today — recheck if an environment is ever added.
 - `docker buildx imagetools create` with one single-manifest source keeps the digest; the workflow verifies both new tags against the digest before any Railway call. If it ever produces an index, replace that step with a registry-API manifest copy.
 - Build time of the image on `ubuntu-24.04` runners (z4 builds take ~5 min; limit 45 min).

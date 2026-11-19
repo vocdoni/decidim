@@ -9,7 +9,7 @@ The files in this directory are installed in `/home/vocdoni/decidim-prod-mode/` 
 z4 (see [Install](#install)); this copy in the fork is the reference.
 
 | Piece | What |
-|-------|------|
+| ------- | ------ |
 | `compose.yaml` | project `decidim-dev-prod`: `web` (Puma, `127.0.0.1:3000`), `worker` (Sidekiq), `release` (one-shot `bin/release` = `db:migrate`) |
 | `dev.env` | all variables, secrets included (chmod 600, never print or copy; not in the fork) |
 | `.env` | `DECIDIM_IMAGE_TAG`, the running image `decidim-vocdoni-dev:<tag>`; written by the updater after a deploy passes its checks |
