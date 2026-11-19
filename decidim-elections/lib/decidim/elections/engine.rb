@@ -20,6 +20,7 @@ module Decidim
             collection do
               get :waiting
               get :receipt
+              get :booth
             end
           end
         end
