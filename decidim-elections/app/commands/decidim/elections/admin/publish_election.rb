@@ -32,7 +32,7 @@ module Decidim
         protected
 
         def event_arguments
-          { election: election, current_user: current_user }
+          { election:, current_user: }
         end
 
         private

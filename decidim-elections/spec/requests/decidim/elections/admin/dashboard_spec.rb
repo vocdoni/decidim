@@ -14,7 +14,7 @@ module Decidim
 
         before { login_as admin, scope: :user }
 
-        # F5 — the dashboard replaces the 0-vote table with an informational note when
+        # The dashboard replaces the 0-vote table with an informational note when
         # the backend has no live tally, until the question's (or election's) results
         # are published.
         describe "results-hidden-until-published note" do
@@ -24,11 +24,8 @@ module Decidim
 
           def register_backend(live_tally:)
             Decidim::Elections.voting_backends.register(backend_name) do |manifest|
-              manifest.transport = :server
               manifest.live_tally = live_tally
               manifest.applies_to { |e| e.id == election.id }
-              manifest.booth_config { |_e, **_opts| {} }
-              manifest.csp_directives { |_e| {} }
             end
           end
 
@@ -99,7 +96,7 @@ module Decidim
           end
         end
 
-        # B1 — the calendar's "Results published at" shows election.results_at.
+        # The calendar's "Results published at" shows election.results_at.
         describe "calendar results_at" do
           let!(:election) { create(:election, :published_results, :with_token_csv_census, component:) }
 

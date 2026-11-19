@@ -30,7 +30,7 @@ module Decidim
         protected
 
         def event_arguments
-          { question: question, action: action }
+          { question:, action: }
         end
 
         private
