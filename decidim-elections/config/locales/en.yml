@@ -257,7 +257,7 @@ en:
           recent: Recent
           start_at: Starting date
         questions:
-          subtitle: 'These are the questions fot this voting process:'
+          subtitle: 'These are the questions for this voting process:'
           title: Election questions
         show:
           active_voting_until: 'Active voting until: %{end_date}'
