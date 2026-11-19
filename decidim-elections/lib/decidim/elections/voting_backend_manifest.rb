@@ -13,7 +13,6 @@ module Decidim
       attribute :name, Symbol
       # :server (CastVotes) or :client (JavaScript adapter)
       attribute :transport, Symbol, default: :server
-      attribute :cast_command, String, default: "Decidim::Elections::CastVotes"
       # Name passed to `registerVotingBackend` by the adapter (:client only)
       attribute :client_adapter, String
       # Same-origin script or pack that registers the adapter (:client only)
@@ -23,7 +22,6 @@ module Decidim
       # Extra receipt content (codes, explorer links)
       attribute :receipt_partial, String
       attribute :vote_overwrite, Boolean, default: true
-      attribute :supports_per_question, Boolean, default: true
       # Whether the backend exposes running vote tallies (false = encrypted ballot).
       attribute :live_tally, Boolean, default: true
 
@@ -49,17 +47,6 @@ module Decidim
 
       def booth_config_for(election, voter_uid:, current_user:)
         @booth_config ? @booth_config.call(election, voter_uid:, current_user:) : {}
-      end
-
-      # |election, voter_uid| -> Boolean
-      def voted(&block)
-        @voted = block
-      end
-
-      def voted?(election, voter_uid)
-        return @voted.call(election, voter_uid) if @voted
-
-        election.votes.exists?(voter_uid:)
       end
 
       # |election| -> { "connect-src" => [...] }
