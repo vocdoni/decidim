@@ -108,8 +108,7 @@ Actions and runs on decidim-dev first.
 |------|--------------|
 | merge to `develop` touching `deploy/railway/` | workflow `[Vocdoni] Image` (`.github/workflows/vocdoni_image.yml`) builds this directory's `Dockerfile` and pushes `sha-<12-char commit>` and `develop` |
 | within ~2 minutes | decidim-dev (z4) runs the new `:develop` image if its checks pass (`deploy/dev/README.md`) |
-| publish a release `prod-YYYY.MM.DD` | workflow `[Vocdoni] Release to prod` (`.github/workflows/vocdoni_release.yml`) waits for approval in the `production` environment |
-| after approval | the image gets the tags `prod-YYYY.MM.DD` and `prod`; `web` deploys first (its pre-deploy `bin/release` runs `db:migrate`), then `worker`, then the crons, each waiting for `SUCCESS` |
+| an operator runs `deploy/railway/deploy-prod.sh <commit>` | the five services point at that commit's image by digest; `web` deploys first (its pre-deploy `bin/release` runs `db:migrate`), then `worker`, then the crons, each waiting for `SUCCESS` |
 
 The image holds no secrets: assets are precompiled with `SECRET_KEY_BASE_DUMMY=1`
 and every variable comes from Railway at run time. Each build installs gems from
@@ -121,40 +120,36 @@ Decidim's npm packages from the pinned Decidim checkout, then runs
 Do not `railway up` a service: it uploads source, switches that service back to a
 Railway build, and the five services stop running the same image.
 
-### Releasing
+### Deploying to prod
 
-A release names a commit that dev has already run; the image for it is
-`sha-<12-char commit>`, built when the commit landed on `develop`. Names are
-`prod-YYYY.MM.DD`, with `.2`, `.3`, ... for further releases on the same day.
+Prod deploys by hand, with the operator's `railway` CLI session (`railway whoami`;
+any workspace member who can deploy). Pick a commit that dev has already run; its
+image is `sha-<12-char commit>`, built when the commit landed on `develop`.
 
 ```bash
 # the commit dev runs: journalctl -u decidim-dev-update on z4, or the newest
 # successful [Vocdoni] Image run on develop
-gh release create prod-2026.11.18 --target <commit> --generate-notes
+deploy/railway/deploy-prod.sh <commit>
+git tag prod-2026.11.19 <commit> && git push origin prod-2026.11.19   # record it
 ```
 
-or from GitHub's UI: "Draft a new release", tag `prod-2026.11.18`, target the
-commit (or `develop` when dev runs its head), "Generate release notes".
-
-The required reviewer approves with "Review deployments" on the run page (or in
-GitHub Mobile). The run fails before asking for approval if the commit is not on
-`develop` or has no `sha-<12>` image. Its summary lists the commit, the gem
-revision, the image digest, the Railway deployments and the previous release.
-
-`prod-<last release>...develop` on GitHub (Compare) lists what dev runs and prod
+The script refuses a commit that is not on `develop` or has no image, prints each
+service's current source and latest deployment (the rollback information), asks
+for confirmation, deploys, and checks `/up` and `/en/`. It uses
+`deploy/ci/railway-promote.sh`, which also runs from CI with a Railway project
+token. `prod-<last tag>...develop` on GitHub (Compare) lists what dev runs and prod
 does not.
+
+The workflow `[Vocdoni] Release to prod` (`.github/workflows/vocdoni_release.yml`)
+does the same from a published `prod-*` release, after approval in the
+`production` environment. It needs a Railway project token (environment secret
+`RAILWAY_TOKEN`), which only a Railway workspace admin can create, and is disabled
+until one exists: `gh workflow enable vocdoni_release.yml` turns it on.
 
 ### Rolling back
 
-Run the release workflow again with the previous release tag, on that tag (the
-`production` environment only admits `prod-*` tags), and approve it:
-
-```bash
-gh workflow run vocdoni_release.yml --ref prod-2026.11.17 -f tag=prod-2026.11.17
-```
-
-The same command redeploys the current release. Migrations are not rolled back;
-Postgres backups are below. If GitHub Actions or the Railway API is unavailable,
+Run `deploy/railway/deploy-prod.sh` with the previous `prod-*` tag. Migrations are
+not rolled back; Postgres backups are below. If the Railway API is unavailable,
 redeploy an earlier deployment of each service from the Railway dashboard.
 
 ## First boot
