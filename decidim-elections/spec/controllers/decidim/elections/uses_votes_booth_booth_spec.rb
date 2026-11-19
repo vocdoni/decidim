@@ -62,7 +62,7 @@ module Decidim
                 m.transport = :client
                 m.client_adapter = "test_adapter"
                 m.applies_to { |_e| true }
-                m.booth_config { |e, voter_uid:, current_user:| { process: e.id } }
+                m.booth_config { |e, **| { process: e.id } }
                 m.csp_directives { |_e| { "connect-src" => ["https://backend.example.com"] } }
               end
               # Reset cached backend on the election.

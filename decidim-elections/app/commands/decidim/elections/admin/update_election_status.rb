@@ -26,7 +26,7 @@ module Decidim
         protected
 
         def event_arguments
-          { election: election, action: action }
+          { election:, action: }
         end
 
         private
