@@ -17,12 +17,12 @@ module Decidim
       attribute :client_adapter, String
       # Same-origin script or pack that registers the adapter (:client only)
       attribute :client_script, String
-      # Rendered hidden in the booth; the adapter shows it when needed (e.g. OTP)
+      # Rendered hidden in the booth; the adapter shows it when needed (e.g. an extra identification step)
       attribute :pre_ballot_partial, String
-      # Extra receipt content (codes, explorer links)
+      # Extra receipt content (e.g. verification codes or links)
       attribute :receipt_partial, String
       attribute :vote_overwrite, Boolean, default: true
-      # Whether the backend exposes running vote tallies (false = encrypted ballot).
+      # Whether the backend exposes running vote tallies (false: results only once published).
       attribute :live_tally, Boolean, default: true
 
       validates :name, presence: true

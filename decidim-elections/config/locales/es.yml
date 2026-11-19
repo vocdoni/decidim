@@ -86,7 +86,7 @@ es:
             title: Preguntas
           questions_table:
             answer: Respuestas
-            encrypted_until_published: Los votos están cifrados hasta que publiques los resultados. Los recuentos aparecerán aquí entonces.
+            hidden_until_published: Los resultados no se muestran hasta que los publiques.
             percentage: Porcentaje
             total: Total
             votes: Votos
@@ -347,7 +347,7 @@ es:
             done: Registrado
             failed: No registrado
             recheck: Comprobar si se ha registrado mi voto
-            rechecking: "Consultando la red de votación…"
+            rechecking: "Comprobando si tu voto se ha registrado…"
             retry: Volver a enviar las preguntas fallidas
             summary_failed: Algunos de tus votos no se pudieron emitir. No se ha registrado nada, por lo que puedes volver a intentarlo de forma segura.
             summary_unconfirmed: "Hemos perdido el contacto mientras enviábamos algunos de tus votos. Es posible que se hayan registrado; comprúebalo antes de volver a intentarlo para no enviarlos dos veces."

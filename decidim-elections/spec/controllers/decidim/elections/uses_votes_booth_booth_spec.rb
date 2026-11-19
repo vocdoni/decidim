@@ -63,7 +63,7 @@ module Decidim
                 m.client_adapter = "test_adapter"
                 m.applies_to { |_e| true }
                 m.booth_config { |e, voter_uid:, current_user:| { process: e.id } }
-                m.csp_directives { |_e| { "connect-src" => ["https://csp.example.com"] } }
+                m.csp_directives { |_e| { "connect-src" => ["https://backend.example.com"] } }
               end
               # Reset cached backend on the election.
               election.instance_variable_set(:@voting_backend, nil)
@@ -87,7 +87,7 @@ module Decidim
             it "appends the backend's CSP directives to connect-src" do
               get(:booth, params:)
               csp = response.headers["Content-Security-Policy"]
-              expect(csp).to include("csp.example.com")
+              expect(csp).to include("backend.example.com")
             end
           end
         end
