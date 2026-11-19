@@ -42,7 +42,7 @@ module Decidim
           context "when enable_voting is submitted but voting is already enabled" do
             before { question.update!(voting_enabled_at: Time.current) }
 
-            it "broadcasts :ok without saving" do
+            it "broadcasts :ok without events or saving" do
               expect(ActiveSupport::Notifications).not_to receive(:publish)
               expect(question).not_to receive(:save!)
               expect { subject.call }.to broadcast(:ok)
@@ -56,7 +56,7 @@ module Decidim
               question.update!(voting_enabled_at: Time.current, published_results_at: Time.current)
             end
 
-            it "broadcasts :ok without saving" do
+            it "broadcasts :ok without events or saving" do
               expect(ActiveSupport::Notifications).not_to receive(:publish)
               expect(question).not_to receive(:save!)
               expect { subject.call }.to broadcast(:ok)
@@ -123,6 +123,48 @@ module Decidim
             it "does not set election.published_results_at" do
               subject.call
               expect(question.election.reload.published_results_at).to be_nil
+            end
+          end
+        end
+
+        describe "notifications (extension surface for external gems)" do
+          let(:event_arguments) { { question:, action: } }
+
+          it "publishes decidim.elections.admin.update_question_status:before and :after" do
+            expect(ActiveSupport::Notifications)
+              .to receive(:publish)
+              .with("decidim.elections.admin.update_question_status:before", **event_arguments)
+              .ordered
+
+            expect(ActiveSupport::Notifications)
+              .to receive(:publish)
+              .with("decidim.elections.admin.update_question_status:after", **event_arguments)
+              .ordered
+
+            subject.call
+          end
+
+          it "delivers the question and action to a subscriber via :after" do
+            captured = nil
+            ActiveSupport::Notifications.subscribe("decidim.elections.admin.update_question_status:after") do |*, payload|
+              captured = payload
+            end
+
+            subject.call
+
+            expect(captured[:question]).to eq(question)
+            expect(captured[:action]).to eq(:enable_voting)
+            expect(question.reload.voting_enabled_at).to be_present
+          ensure
+            ActiveSupport::Notifications.unsubscribe("decidim.elections.admin.update_question_status:after")
+          end
+
+          context "when already in the requested state (no-op)" do
+            before { question.update!(voting_enabled_at: Time.current) }
+
+            it "does not publish any notifications" do
+              expect(ActiveSupport::Notifications).not_to receive(:publish)
+              subject.call
             end
           end
         end
