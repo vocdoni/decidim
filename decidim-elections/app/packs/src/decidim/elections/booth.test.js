@@ -1,6 +1,6 @@
 /* global jest */
 
-import { booth, flush, visible } from "src/decidim/elections/booth_test_helpers";
+import { booth, flush, mountBooth, visible } from "src/decidim/elections/booth_test_helpers";
 
 describe("client-side booth with questions that open later", () => {
   let adapter = null;
@@ -64,5 +64,30 @@ describe("client-side booth with questions that open later", () => {
     expect(adapter.cast).toHaveBeenLastCalledWith(ctx, [{ questionId: "2", responseOptionIds: [] }]);
     const codes = Array.from(document.querySelectorAll("[data-booth-receipts] p[title]")).map((code) => code.textContent);
     expect(codes).toEqual(["0xaa", "0xbb"]);
+  });
+});
+
+describe("client-side booth with a cast result that omits lists", () => {
+  const castWith = async (result) => {
+    const { adapter } = await mountBooth(["1"]);
+    adapter.cast.mockResolvedValueOnce(result);
+    document.querySelector("[data-booth-next]").click();
+    document.querySelector("[data-booth-cast]").click();
+    await flush();
+  };
+
+  it("shows the receipt when only receipts are returned", async () => {
+    await castWith({ receipts: [{ questionId: "1", code: "0xaa" }] });
+
+    expect(visible().map((step) => step.dataset.boothStep)).toEqual(["receipt"]);
+    const codes = Array.from(document.querySelectorAll("[data-booth-receipts] p[title]")).map((code) => code.textContent);
+    expect(codes).toEqual(["0xaa"]);
+  });
+
+  it("shows the submit step when only failures are returned", async () => {
+    await castWith({ failed: [{ questionId: "1", error: "boom" }] });
+
+    expect(visible().map((step) => step.dataset.boothStep)).toEqual(["submit"]);
+    expect(document.querySelector("[data-booth-retry]").hidden).toBe(false);
   });
 });

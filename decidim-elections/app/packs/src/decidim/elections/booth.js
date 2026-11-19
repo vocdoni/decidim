@@ -1,4 +1,4 @@
-import { findVotingBackend } from "src/decidim/elections/voting_backends";
+import { castOutcome, findVotingBackend } from "src/decidim/elections/voting_backends";
 import { createSubmitStep } from "src/decidim/elections/booth_submit";
 import { createQuestionLoader } from "src/decidim/elections/booth_live";
 import { createReceiptItemBuilder, createReceiptPanels, showCastFlash } from "src/decidim/elections/booth_receipt";
@@ -225,7 +225,7 @@ const initBooth = async (root) => {
       questionId: section.dataset.questionId,
       responseOptionIds: selected(section)
     }));
-    const result = await adapter.cast(ctx, ballot);
+    const result = castOutcome(await adapter.cast(ctx, ballot));
     const allConfirmed = [...priorReceipts, ...result.receipts];
     if (result.unconfirmed.length === 0 && result.failed.length === 0) {
       showReceipt(allConfirmed, { cast: true });
