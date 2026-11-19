@@ -13,14 +13,14 @@ built.
 
 Railway project `decidim-vocdoni` (workspace Vocdoni, region europe-west4):
 
-| Service    | What                                   | Config |
-|------------|----------------------------------------|--------|
-| `web`      | Puma; release step `bin/release` (pre-deploy: `db:migrate`); healthcheck `/up`; custom domain `decidim.vocdoni.dev` | `Dockerfile`, `.railway/railway.ts` |
-| `worker`   | Sidekiq, queues in `config/sidekiq.yml` (`vocdoni` plus Decidim's) | same image, `bundle exec sidekiq -C config/sidekiq.yml` |
+| Service | What | Config |
+| --- | --- | --- |
+| `web` | Puma; release step `bin/release` (pre-deploy: `db:migrate`); healthcheck `/up`; custom domain `decidim.vocdoni.dev` | `Dockerfile`, `.railway/railway.ts` |
+| `worker` | Sidekiq, queues in `config/sidekiq.yml` (`vocdoni` plus Decidim's) | same image, `bundle exec sidekiq -C config/sidekiq.yml` |
 | `cron-15min`, `cron-daily`, `cron-weekly` | Decidim's scheduled rake tasks, one run per trigger (see [Scheduled tasks](#scheduled-tasks)) | same image, start command and cron schedule per service |
 | `Postgres` | Railway Postgres, 50 GB volume, with backups (see [Backups](#backups)) | |
-| `Redis`    | Railway Redis (Sidekiq, Action Cable)   | |
-| `uploads`  | Railway bucket (S3-compatible, private) | Active Storage `s3` service |
+| `Redis` | Railway Redis (Sidekiq, Action Cable) | |
+| `uploads` | Railway bucket (S3-compatible, private) | Active Storage `s3` service |
 
 `.railway/railway.ts` is Railway's infrastructure-as-code description of part
 of the project (Railway has deprecated `railway.toml`/`railway.json`
@@ -50,7 +50,7 @@ exit; `restartPolicyType` is `NEVER`, so a failed run waits for the next
 trigger. They replace the system crontab a Decidim host would have.
 
 | Service | Schedule | Start command |
-|---------|----------|---------------|
+| --------- | ---------- | --------------- |
 | `cron-15min` | `*/15 * * * *` | `bundle exec rails decidim_participatory_processes:change_active_step` |
 | `cron-daily` | `5 0 * * *` | `bundle exec rails decidim:delete_download_your_data_files decidim:open_data:export decidim_meetings:clean_registration_forms decidim:reminders:all decidim:mailers:notifications_digest_daily decidim:participants:delete_inactive_participants` |
 | `cron-weekly` | `5 0 * * 6` | `bundle exec rails decidim:mailers:notifications_digest_weekly` |
@@ -70,7 +70,7 @@ Set on `web`, `worker` and the cron services (secret values never live in this
 repository):
 
 | Name | Value |
-|------|-------|
+| ------ | ------- |
 | `SECRET_KEY_BASE` | 128 hex chars from a CSPRNG (`openssl rand -hex 64`); same on both services |
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
 | `REDIS_URL` | `${{Redis.REDIS_URL}}` |
@@ -105,11 +105,10 @@ digest. Railway does not build anything; the image is built once by GitHub
 Actions and runs on decidim-dev first.
 
 | Step | What happens |
-|------|--------------|
+| ------ | -------------- |
 | merge to `develop` touching `deploy/railway/` | workflow `[Vocdoni] Image` (`.github/workflows/vocdoni_image.yml`) builds this directory's `Dockerfile` and pushes `sha-<12-char commit>` and `develop` |
 | within ~2 minutes | decidim-dev (z4) runs the new `:develop` image if its checks pass (`deploy/dev/README.md`) |
-| publish a release `prod-YYYY.MM.DD` | workflow `[Vocdoni] Release to prod` (`.github/workflows/vocdoni_release.yml`) waits for approval in the `production` environment |
-| after approval | the image gets the tags `prod-YYYY.MM.DD` and `prod`; `web` deploys first (its pre-deploy `bin/release` runs `db:migrate`), then `worker`, then the crons, each waiting for `SUCCESS` |
+| publish a release `prod-YYYY.MM.DD`, then run `deploy/railway/deploy-prod.sh prod-YYYY.MM.DD` | the five services point at that commit's image by digest; `web` deploys first (its pre-deploy `bin/release` runs `db:migrate`), then `worker`, then the crons, each waiting for `SUCCESS` |
 
 The image holds no secrets: assets are precompiled with `SECRET_KEY_BASE_DUMMY=1`
 and every variable comes from Railway at run time. Each build installs gems from
@@ -125,36 +124,40 @@ Railway build, and the five services stop running the same image.
 
 A release names a commit that dev has already run; the image for it is
 `sha-<12-char commit>`, built when the commit landed on `develop`. Names are
-`prod-YYYY.MM.DD`, with `.2`, `.3`, ... for further releases on the same day.
+`prod-YYYY.MM.DD`, with `.2`, `.3`, ... for further releases on the same day. The
+release is the record of what goes to prod; it is applied by hand, with the
+operator's `railway` CLI session (`railway whoami`; any workspace member who can
+deploy):
 
 ```bash
 # the commit dev runs: journalctl -u decidim-dev-update on z4, or the newest
 # successful [Vocdoni] Image run on develop
-gh release create prod-2026.11.18 --target <commit> --generate-notes
+gh release create prod-2026.11.19 --target <commit> --generate-notes
+deploy/railway/deploy-prod.sh prod-2026.11.19
 ```
 
-or from GitHub's UI: "Draft a new release", tag `prod-2026.11.18`, target the
+or from GitHub's UI: "Draft a new release", tag `prod-2026.11.19`, target the
 commit (or `develop` when dev runs its head), "Generate release notes".
 
-The required reviewer approves with "Review deployments" on the run page (or in
-GitHub Mobile). The run fails before asking for approval if the commit is not on
-`develop` or has no `sha-<12>` image. Its summary lists the commit, the gem
-revision, the image digest, the Railway deployments and the previous release.
+The script refuses a tag without a release, a commit that is not on `develop` or
+has no image; it prints each service's current source and latest deployment (the
+rollback information), asks for confirmation, deploys, and checks `/up` and
+`/en/`. It uses `deploy/ci/railway-promote.sh`, which also runs from CI with a
+Railway project token. `prod-<last release>...develop` on GitHub (Compare) lists
+what dev runs and prod does not.
 
-`prod-<last release>...develop` on GitHub (Compare) lists what dev runs and prod
-does not.
+Publishing the release runs the workflow `[Vocdoni] Release to prod`
+(`.github/workflows/vocdoni_release.yml`): it checks that the commit is on
+`develop` and has an image, and its summary gives the image digest and the
+command above. It deploys to Railway itself, after approval in the `production`
+environment, once the repository variable `RAILWAY_DEPLOY` is `true` and the
+environment secret `RAILWAY_TOKEN` holds a Railway project token (only a Railway
+workspace admin can create one).
 
 ### Rolling back
 
-Run the release workflow again with the previous release tag, on that tag (the
-`production` environment only admits `prod-*` tags), and approve it:
-
-```bash
-gh workflow run vocdoni_release.yml --ref prod-2026.11.17 -f tag=prod-2026.11.17
-```
-
-The same command redeploys the current release. Migrations are not rolled back;
-Postgres backups are below. If GitHub Actions or the Railway API is unavailable,
+Run `deploy/railway/deploy-prod.sh` with the previous release's tag. Migrations are
+not rolled back; Postgres backups are below. If the Railway API is unavailable,
 redeploy an earlier deployment of each service from the Railway dashboard.
 
 ## First boot

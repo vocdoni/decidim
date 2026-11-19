@@ -3,6 +3,9 @@
 # Triggered by publishing a release `prod-YYYY.MM.DD[.N]`, or for redeploys and
 # rollbacks by a dispatch on the tag itself:
 #   gh workflow run vocdoni_release.yml --ref prod-YYYY.MM.DD -f tag=prod-YYYY.MM.DD
+# Railway deploys need the repository variable RAILWAY_DEPLOY=true and the
+# `production` secret RAILWAY_TOKEN (a project token). Without the variable the
+# run checks the release and says how to apply it by hand (deploy-prod.sh).
 name: "[Vocdoni] Release to prod"
 
 on:
@@ -95,9 +98,37 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "$tag -> $commit -> $IMAGE@$digest (gem $gem); previous release: ${previous:-none}"
 
+  manual:
+    name: Apply by hand
+    needs: resolve
+    if: vars.RAILWAY_DEPLOY != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Summary
+        env:
+          TAG: ${{ needs.resolve.outputs.tag }}
+          COMMIT: ${{ needs.resolve.outputs.commit }}
+          DIGEST: ${{ needs.resolve.outputs.digest }}
+          GEM: ${{ needs.resolve.outputs.gem }}
+        run: |
+          echo "::warning::no Railway deploy from CI (RAILWAY_DEPLOY is not true); apply with: deploy/railway/deploy-prod.sh $TAG"
+          {
+            echo "### Release $TAG (apply by hand)"
+            echo
+            echo "- Commit: \`$COMMIT\`"
+            echo "- Gem revision: \`$GEM\`"
+            echo "- Image: \`$IMAGE@$DIGEST\`"
+            echo
+            echo "Apply it from a checkout of the fork, with a logged-in \`railway\` CLI:"
+            echo "\`deploy/railway/deploy-prod.sh $TAG\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   deploy:
     name: Deploy to Railway
     needs: resolve
+    if: vars.RAILWAY_DEPLOY == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     environment:

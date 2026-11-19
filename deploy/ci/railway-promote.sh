@@ -11,8 +11,10 @@
 #           deploys, and waits for SUCCESS; then reads every source back again.
 #
 # Environment:
-#   RAILWAY_TOKEN           project token scoped to the target environment (secret)
+#   RAILWAY_TOKEN           project token scoped to the target environment (secret);
+#                           unset = the `railway` CLI's logged-in session (manual runs)
 #   RAILWAY_ENVIRONMENT_ID  the environment the token must belong to
+#   RAILWAY_PROJECT_ID      with the CLI session: the project that environment must belong to
 #   RAILWAY_SERVICES        "name=serviceId ..." in deploy order
 #   SUMMARY_FILE            optional; markdown table rows are appended to it
 #   POLL_INTERVAL, POLL_TIMEOUT  seconds; default 10 and 900 per service
@@ -30,7 +32,11 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 mode=$1 image=$2
 case $mode in check|promote) ;; *) die "unknown mode: $mode" ;; esac
 [[ "$image" =~ ^[a-z0-9./_-]+@sha256:[0-9a-f]{64}$ ]] || die "image must be a digest reference: $image"
-: "${RAILWAY_TOKEN:?RAILWAY_TOKEN is not set}"
+RAILWAY_TOKEN=${RAILWAY_TOKEN:-}
+if [ -z "$RAILWAY_TOKEN" ]; then
+  command -v railway > /dev/null || die "RAILWAY_TOKEN is not set and the railway CLI is not installed"
+  : "${RAILWAY_PROJECT_ID:?RAILWAY_PROJECT_ID is needed with the railway CLI session}"
+fi
 : "${RAILWAY_ENVIRONMENT_ID:?RAILWAY_ENVIRONMENT_ID is not set}"
 : "${RAILWAY_SERVICES:?RAILWAY_SERVICES is not set}"
 
@@ -38,13 +44,21 @@ case $mode in check|promote) ;; *) die "unknown mode: $mode" ;; esac
 hdr=$(mktemp)
 trap 'rm -f "$hdr"' EXIT
 chmod 600 "$hdr"
-printf 'Project-Access-Token: %s\n' "$RAILWAY_TOKEN" > "$hdr"
+[ -z "$RAILWAY_TOKEN" ] || printf 'Project-Access-Token: %s\n' "$RAILWAY_TOKEN" > "$hdr"
 
 # gql <document> <variables JSON>: prints .data, fails on HTTP or GraphQL errors.
 # GQL_NO_RETRY=1 sends it once: a retried serviceInstanceDeployV2 could start a
 # second deployment that supersedes the watched one (rerun the workflow instead).
 gql() {
-  local body resp retry=(--retry 3 --retry-all-errors)
+  local body resp
+  if [ -z "$RAILWAY_TOKEN" ]; then
+    # The CLI sends each request once and exits non-zero on HTTP or GraphQL errors.
+    resp=$(railway api --compact --variables "$2" "$1") \
+      || die "Railway API request failed: $(jq -r '[.errors[]?.message] | join("; ")' <<<"$resp" 2>/dev/null)"
+    jq -c '.data' <<<"$resp"
+    return
+  fi
+  local retry=(--retry 3 --retry-all-errors)
   [ "${GQL_NO_RETRY:-0}" = 1 ] && retry=()
   body=$(jq -nc --arg q "$1" --argjson v "$2" '{query: $q, variables: $v}')
   resp=$(curl -sS --fail-with-body --max-time 60 "${retry[@]}" \
@@ -77,9 +91,17 @@ M_DEPLOY='mutation deploy($serviceId: String!, $environmentId: String!) {
 # shellcheck disable=SC2016
 Q_DEPLOYMENT='query deployment($id: String!) { deployment(id: $id) { id status meta } }'
 
-env_id=$(gql "$Q_TOKEN" '{}' | jq -r '.projectToken.environmentId')
-[ "$env_id" = "$RAILWAY_ENVIRONMENT_ID" ] \
-  || die "the token belongs to environment $env_id, not $RAILWAY_ENVIRONMENT_ID"
+if [ -n "$RAILWAY_TOKEN" ]; then
+  env_id=$(gql "$Q_TOKEN" '{}' | jq -r '.projectToken.environmentId')
+  [ "$env_id" = "$RAILWAY_ENVIRONMENT_ID" ] \
+    || die "the token belongs to environment $env_id, not $RAILWAY_ENVIRONMENT_ID"
+else
+  # shellcheck disable=SC2016
+  project=$(gql 'query env($id: String!) { environment(id: $id) { projectId } }' \
+    "$(jq -nc --arg i "$RAILWAY_ENVIRONMENT_ID" '{id: $i}')" | jq -r '.environment.projectId')
+  [ "$project" = "$RAILWAY_PROJECT_ID" ] \
+    || die "environment $RAILWAY_ENVIRONMENT_ID belongs to project $project, not $RAILWAY_PROJECT_ID"
+fi
 
 vars() { jq -nc --arg s "$1" --arg e "$RAILWAY_ENVIRONMENT_ID" '{serviceId: $s, environmentId: $e}'; }
 instance() { gql "$Q_INSTANCE" "$(vars "$1")" | jq -c '.serviceInstance'; }

@@ -233,7 +233,7 @@ Nothing records or enforces what runs where.
 ### Alternatives considered
 
 | Option | Why not |
-|---|---|
+| --- | --- |
 | Environment branches (`main`→prod, `dev`→dev) | Branches drift; hotfixes need merging both ways; prod would build its own image. |
 | Railway builds from the release tag (`railway up` in CI) | Dev and prod would run different builds of the same commit; slower prod deploys. |
 | GitHub pushes deploys to z4 | z4 SSH is behind the VPN; a pull-based updater needs no inbound access or deploy key. |
