@@ -2,7 +2,7 @@
 # Deploys decidim.vocdoni.dev (Railway, environment production) by hand, with the
 # operator's `railway` CLI session: points web, worker and the three crons at the
 # GHCR image dev already ran for a release's commit, by digest, one service at a
-# time. See README.md, "Deploying to prod".
+# time. See README.md, "Releasing".
 #
 # usage: deploy/railway/deploy-prod.sh <release tag prod-YYYY.MM.DD[.N]> [--yes]
 # needs: railway (logged in, `railway whoami`), gh, curl, jq
@@ -27,7 +27,7 @@ for c in railway gh curl jq; do command -v "$c" > /dev/null || die "$c is not in
 railway whoami > /dev/null 2>&1 || die "the railway CLI is not logged in (railway login)"
 
 gh release view "$ref" -R "$REPO" --json tagName > /dev/null 2>&1 \
-  || die "no release $ref in $REPO: create it first (README.md, Deploying to prod)"
+  || die "no release $ref in $REPO: create it first (README.md, Releasing)"
 commit=$(gh api "repos/$REPO/commits/$ref" --jq .sha) || die "cannot resolve $ref in $REPO"
 status=$(gh api "repos/$REPO/compare/$commit...develop" --jq .status)
 case $status in ahead|identical) ;; *) die "$commit is not on develop" ;; esac

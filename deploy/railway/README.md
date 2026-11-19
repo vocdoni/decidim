@@ -120,9 +120,9 @@ Decidim's npm packages from the pinned Decidim checkout, then runs
 Do not `railway up` a service: it uploads source, switches that service back to a
 Railway build, and the five services stop running the same image.
 
-### Deploying to prod
+### Releasing
 
-A release names a commit that dev has already run; its image is
+A release names a commit that dev has already run; the image for it is
 `sha-<12-char commit>`, built when the commit landed on `develop`. Names are
 `prod-YYYY.MM.DD`, with `.2`, `.3`, ... for further releases on the same day. The
 release is the record of what goes to prod; it is applied by hand, with the
@@ -135,6 +135,9 @@ deploy):
 gh release create prod-2026.11.19 --target <commit> --generate-notes
 deploy/railway/deploy-prod.sh prod-2026.11.19
 ```
+
+or from GitHub's UI: "Draft a new release", tag `prod-2026.11.19`, target the
+commit (or `develop` when dev runs its head), "Generate release notes".
 
 The script refuses a tag without a release, a commit that is not on `develop` or
 has no image; it prints each service's current source and latest deployment (the
