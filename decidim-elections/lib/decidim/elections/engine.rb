@@ -43,6 +43,12 @@ module Decidim
         end
       end
 
+      initializer "decidim.elections.default_voting_backends" do |_app|
+        Decidim::Elections.voting_backends.register(:decidim) do |manifest|
+          manifest.live_tally = true
+        end
+      end
+
       initializer "decidim.elections.default_censuses" do |_app|
         Decidim::Elections.census_registry.register(:token_csv) do |manifest|
           manifest.admin_form = "Decidim::Elections::Admin::Censuses::TokenCsvForm"

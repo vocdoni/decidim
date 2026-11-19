@@ -117,6 +117,10 @@ module Decidim
         published_results_at
       end
 
+      def voting_backend
+        @voting_backend ||= Decidim::Elections.voting_backend_for(self)
+      end
+
       def census
         @census ||= Decidim::Elections.census_registry.find(census_manifest)
       end

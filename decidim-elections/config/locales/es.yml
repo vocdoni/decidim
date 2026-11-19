@@ -86,6 +86,7 @@ es:
             title: Preguntas
           questions_table:
             answer: Respuestas
+            hidden_until_published: Los resultados no se muestran hasta que los publiques.
             percentage: Porcentaje
             total: Total
             votes: Votos

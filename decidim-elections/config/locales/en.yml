@@ -87,6 +87,7 @@ en:
             title: Questions
           questions_table:
             answer: Answers
+            hidden_until_published: Results are not shown until you publish them.
             percentage: Percentage
             total: Total
             votes: Votes
