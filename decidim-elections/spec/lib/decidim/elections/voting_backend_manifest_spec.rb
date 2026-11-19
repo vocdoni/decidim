@@ -92,13 +92,13 @@ module Decidim
         let(:user) { double("user") }
 
         it "returns an empty hash when no block is set" do
-          expect(manifest.booth_config_for(election, voter_uid: voter_uid, current_user: user)).to eq({})
+          expect(manifest.booth_config_for(election, voter_uid:, current_user: user)).to eq({})
         end
 
         it "calls the registered block with the election and keyword args" do
           manifest.booth_config { |e, voter_uid:, current_user:| { election: e, uid: voter_uid, user: current_user } }
-          result = manifest.booth_config_for(election, voter_uid: voter_uid, current_user: user)
-          expect(result).to eq(election: election, uid: voter_uid, user: user)
+          result = manifest.booth_config_for(election, voter_uid:, current_user: user)
+          expect(result).to eq(election:, uid: voter_uid, user:)
         end
       end
 
