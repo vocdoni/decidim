@@ -13,6 +13,7 @@ module Decidim
               get :confirm
               post :cast
               get :receipt
+              get :booth
             end
           end
           resources :per_question_votes, except: [:edit, :destroy] do
@@ -45,7 +46,7 @@ module Decidim
 
       initializer "decidim.elections.default_voting_backends" do |_app|
         Decidim::Elections.voting_backends.register(:decidim) do |manifest|
-          manifest.live_tally = true
+          manifest.transport = :server
         end
       end
 

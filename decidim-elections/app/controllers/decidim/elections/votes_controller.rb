@@ -11,6 +11,12 @@ module Decidim
         redirect_to Decidim::EngineRouter.main_proxy(current_component).new_election_per_question_vote_path(election) if election.per_question?
       end
 
+      # A client-side backend never stores answers on the server: the
+      # server-side ballot steps all lead to the single-page booth.
+      before_action only: [:show, :update, :confirm, :cast, :receipt] do
+        redirect_to booth_election_votes_path(election) if voting_backend.client?
+      end
+
       # Show the voting form for the given question
       def show
         enforce_permission_to(:create, :vote, election:)
