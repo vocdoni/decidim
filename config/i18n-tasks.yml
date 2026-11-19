@@ -158,6 +158,7 @@ ignore_unused:
   - decidim.elections.elections.filters.state_values.*
   - decidim.elections.elections.orders.*
   - decidim.elections.elections.show.*
+  - decidim.elections.votes.booth.submit.*
   - decidim.elections.votes.check_census.*
   - decidim.elections.votes.question.*
   - decidim.proposals.answers.*
