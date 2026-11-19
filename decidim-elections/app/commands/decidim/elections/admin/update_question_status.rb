@@ -11,11 +11,11 @@ module Decidim
 
         def call
           return broadcast(:invalid) unless action.in?([:enable_voting, :publish_results])
-          # Already in the requested state (e.g. a double submit): succeed without writes.
+          # Already in the requested state (e.g. a double submit): succeed without events or writes.
           return broadcast(:ok, question) if already_in_requested_state?
           return broadcast(:invalid) if invalid_publish?
 
-          transaction do
+          with_events(with_transaction: true) do
             update_status
             question.save!
             publish_election_results_if_last!
@@ -25,6 +25,12 @@ module Decidim
         rescue StandardError => e
           Rails.logger.error "#{e.class.name}: #{e.message}"
           broadcast(:invalid)
+        end
+
+        protected
+
+        def event_arguments
+          { question:, action: }
         end
 
         private
