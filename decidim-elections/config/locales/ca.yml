@@ -86,6 +86,7 @@ ca:
             title: Preguntes
           questions_table:
             answer: Respostes
+            hidden_until_published: Els resultats no es mostren fins que els publiquis.
             percentage: Percentatge
             total: Total
             votes: Vots

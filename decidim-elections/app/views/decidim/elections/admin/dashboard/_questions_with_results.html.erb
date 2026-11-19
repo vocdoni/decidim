@@ -18,6 +18,11 @@
         <div><%= decidim_sanitize_admin translated_attribute(question.description) %></div>
       </div>
       <div class="row column">
+        <%# when the backend has no live tally, show a note until results are published. %>
+        <% results_visible = election.per_question? ? question.published_results? : election.published_results? %>
+        <% if !election.voting_backend.live_tally && !results_visible %>
+          <p class="text-gray-2 italic mb-4"><%= t("decidim.elections.admin.dashboard.questions_table.hidden_until_published") %></p>
+        <% else %>
         <div class="table-scroll mb-4">
           <table class="table-list">
             <thead>
@@ -43,6 +48,7 @@
             </tbody>
           </table>
         </div>
+        <% end %>
       </div>
     </div>
   <% end %>
