@@ -1,6 +1,6 @@
 GIT
   remote: https://github.com/vocdoni/decidim-secure_elections.git
-  revision: a2f6271a4bbd5c852b9d2d4b218ccbe3093ad71a
+  revision: dea206396e62b11ee7a65af896bbd57d7092215d
   branch: main
   specs:
     decidim-elections-vocdoni (0.1.0)
