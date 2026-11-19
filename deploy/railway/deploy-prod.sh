@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Deploys decidim.vocdoni.dev (Railway, environment production) by hand, with the
 # operator's `railway` CLI session: points web, worker and the three crons at the
-# GHCR image dev already ran for a develop commit, by digest, one service at a time.
-# See README.md, "Deploying".
+# GHCR image dev already ran for a release's commit, by digest, one service at a
+# time. See README.md, "Deploying to prod".
 #
-# usage: deploy/railway/deploy-prod.sh <develop commit or ref> [--yes]
+# usage: deploy/railway/deploy-prod.sh <release tag prod-YYYY.MM.DD[.N]> [--yes]
 # needs: railway (logged in, `railway whoami`), gh, curl, jq
 set -euo pipefail
 shopt -s inherit_errexit
@@ -21,11 +21,13 @@ unset RAILWAY_TOKEN
 die() { echo "ERROR: $*" >&2; exit 1; }
 
 ref=${1:-} yes=${2:-}
-[ -n "$ref" ] || die "usage: $0 <develop commit or ref> [--yes]  (dev runs: journalctl -u decidim-dev-update on z4)"
-[[ "$ref" =~ ^[A-Za-z0-9._/-]+$ ]] || die "bad ref: $ref"
+[[ "$ref" =~ ^prod-[0-9]{4}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$ ]] \
+  || die "usage: $0 <release tag prod-YYYY.MM.DD[.N]> [--yes]"
 for c in railway gh curl jq; do command -v "$c" > /dev/null || die "$c is not installed"; done
 railway whoami > /dev/null 2>&1 || die "the railway CLI is not logged in (railway login)"
 
+gh release view "$ref" -R "$REPO" --json tagName > /dev/null 2>&1 \
+  || die "no release $ref in $REPO: create it first (README.md, Deploying to prod)"
 commit=$(gh api "repos/$REPO/commits/$ref" --jq .sha) || die "cannot resolve $ref in $REPO"
 status=$(gh api "repos/$REPO/compare/$commit...develop" --jq .status)
 case $status in ahead|identical) ;; *) die "$commit is not on develop" ;; esac
@@ -43,6 +45,7 @@ digest=$(curl -fsS -o /dev/null -D - -H "Authorization: Bearer $tok" \
 here=$(cd "$(dirname "$0")/../.." && pwd)
 promote="$here/deploy/ci/railway-promote.sh"
 
+echo "release $ref"
 echo "commit $commit"
 echo "image  $IMAGE@$digest"
 echo
@@ -66,4 +69,4 @@ for path in /up /en/; do
   echo "$PROD_URL$path $code"
   [ "$code" = 200 ] || die "$PROD_URL$path returned $code"
 done
-echo "prod runs $IMAGE@$digest (commit $commit)"
+echo "prod runs $ref: $IMAGE@$digest (commit $commit)"
