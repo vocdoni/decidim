@@ -97,6 +97,33 @@ module Decidim
           end
         end
 
+        describe "#enable_question_voting_button (disable on submit)" do
+          let(:can_enable_voting) { true }
+
+          before do
+            allow(question).to receive(:voting_enabled?).and_return(false)
+            allow(question).to receive(:published_results?).and_return(false)
+            allow(question).to receive(:can_enable_voting?).and_return(true)
+          end
+
+          it "renders the button with data-disable attribute" do
+            html = helper.enable_question_voting_button(question)
+            expect(html).to include("data-disable=\"true\"")
+          end
+        end
+
+        describe "#publish_question_button (disable on submit)" do
+          before do
+            allow(question).to receive(:published_results?).and_return(false)
+            allow(question).to receive(:publishable_results?).and_return(true)
+          end
+
+          it "renders the button with data-disable attribute" do
+            html = helper.publish_question_button(question)
+            expect(html).to include("data-disable=\"true\"")
+          end
+        end
+
         describe "#enable_question_voting_button" do
           let(:voting_enabled) { false }
           let(:published_results) { false }
