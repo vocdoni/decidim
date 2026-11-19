@@ -1,4 +1,4 @@
-import { findVotingBackend } from "src/decidim/elections/voting_backends";
+import { castOutcome, findVotingBackend } from "src/decidim/elections/voting_backends";
 
 /**
  * Builds the per-question submit status screen shown after a partial-failure cast.
@@ -108,7 +108,7 @@ export const createSubmitStep = ({ questions, submitStep, progress, show, showRe
         retryBtn.disabled = false;
         return;
       }
-      const retryResult = await retryAdapter.cast(ctx, retryBallot);
+      const retryResult = castOutcome(await retryAdapter.cast(ctx, retryBallot));
       const nextConfirmed = [...confirmed, ...retryResult.receipts];
       if (retryResult.unconfirmed.length === 0 && retryResult.failed.length === 0) {
         showReceipt(nextConfirmed, { cast: true });
@@ -128,7 +128,7 @@ export const createSubmitStep = ({ questions, submitStep, progress, show, showRe
         progress("");
         return;
       }
-      const recheckResult = await recheckAdapter.recheck(ctx);
+      const recheckResult = castOutcome(await recheckAdapter.recheck(ctx));
       const recheckIds = new Set(recheckResult.receipts.map((rec) => String(rec.questionId)));
       const nowConfirmed = [...confirmed, ...recheckResult.receipts];
       const stillUnconfirmed = unconfirmed.filter((item) => !recheckIds.has(String(item.questionId)));

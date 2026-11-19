@@ -17,7 +17,7 @@ module Decidim
         # F5 — the dashboard replaces the 0-vote table with an informational note when
         # the backend has no live tally, until the question's (or election's) results
         # are published.
-        describe "encrypted-until-published note" do
+        describe "results-hidden-until-published note" do
           let!(:election) { create(:election, :published, :ongoing, :per_question, :with_token_csv_census, component:) }
           let!(:question) { create(:election_question, :with_response_options, election:) }
           let(:backend_name) { :"test_live_tally_#{SecureRandom.hex(4)}" }
@@ -42,10 +42,10 @@ module Decidim
               get dashboard_path, headers:
             end
 
-            it "shows the encrypted note instead of the results table" do
+            it "shows the hidden-results note instead of the results table" do
               expect(response).to have_http_status(:ok)
               expect(response.body).to include(
-                I18n.t("decidim.elections.admin.dashboard.questions_table.encrypted_until_published")
+                I18n.t("decidim.elections.admin.dashboard.questions_table.hidden_until_published")
               )
               expect(response.body).not_to include("table-list")
             end
@@ -62,7 +62,7 @@ module Decidim
               expect(response).to have_http_status(:ok)
               expect(response.body).to include("table-list")
               expect(response.body).not_to include(
-                I18n.t("decidim.elections.admin.dashboard.questions_table.encrypted_until_published")
+                I18n.t("decidim.elections.admin.dashboard.questions_table.hidden_until_published")
               )
             end
           end
@@ -77,7 +77,7 @@ module Decidim
               expect(response).to have_http_status(:ok)
               expect(response.body).to include("table-list")
               expect(response.body).not_to include(
-                I18n.t("decidim.elections.admin.dashboard.questions_table.encrypted_until_published")
+                I18n.t("decidim.elections.admin.dashboard.questions_table.hidden_until_published")
               )
             end
           end
@@ -93,7 +93,7 @@ module Decidim
             it "uses election.published_results? to decide visibility" do
               expect(response).to have_http_status(:ok)
               expect(response.body).to include(
-                I18n.t("decidim.elections.admin.dashboard.questions_table.encrypted_until_published")
+                I18n.t("decidim.elections.admin.dashboard.questions_table.hidden_until_published")
               )
             end
           end

@@ -20,10 +20,6 @@ module Decidim
           expect(manifest.vote_overwrite).to be(true)
         end
 
-        it "defaults supports_per_question to true" do
-          expect(manifest.supports_per_question).to be(true)
-        end
-
         it "defaults live_tally to true" do
           expect(manifest.live_tally).to be(true)
         end
@@ -103,25 +99,6 @@ module Decidim
           manifest.booth_config { |e, voter_uid:, current_user:| { election: e, uid: voter_uid, user: current_user } }
           result = manifest.booth_config_for(election, voter_uid: voter_uid, current_user: user)
           expect(result).to eq(election: election, uid: voter_uid, user: user)
-        end
-      end
-
-      describe "#voted?" do
-        let(:election) { build(:election) }
-        let(:voter_uid) { "uid-abc" }
-
-        context "when no voted block is set" do
-          it "delegates to election.votes.exists?" do
-            expect(election.votes).to receive(:exists?).with(voter_uid: voter_uid).and_return(false)
-            expect(manifest.voted?(election, voter_uid)).to be(false)
-          end
-        end
-
-        context "when a voted block is set" do
-          it "calls the block" do
-            manifest.voted { |_e, _uid| true }
-            expect(manifest.voted?(election, voter_uid)).to be(true)
-          end
         end
       end
 

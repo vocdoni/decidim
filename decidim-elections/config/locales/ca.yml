@@ -86,7 +86,7 @@ ca:
             title: Preguntes
           questions_table:
             answer: Respostes
-            encrypted_until_published: Els vots estan xifrats fins que publiquis els resultats. Els recomptes apareixeran aquí llavors.
+            hidden_until_published: Els resultats no es mostren fins que els publiquis.
             percentage: Percentatge
             total: Total
             votes: Vots
@@ -347,7 +347,7 @@ ca:
             done: Registrat
             failed: No registrat
             recheck: Comprovar si s'ha registrat el meu vot
-            rechecking: "Consultant la xarxa de votació…"
+            rechecking: "Comprovant si el teu vot s'ha registrat…"
             retry: Tornar a enviar les preguntes fallides
             summary_failed: Alguns dels teus vots no s'han pogut emetre. No s'ha registrat res, de manera que pots tornar-ho a intentar de forma segura.
             summary_unconfirmed: "Hem perdut el contacte mentre enviàvem alguns dels teus vots. És possible que s'hagin registrat; comprova-ho abans de tornar a intentar-ho per no enviar-los dues vegades."

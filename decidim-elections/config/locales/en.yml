@@ -87,7 +87,7 @@ en:
             title: Questions
           questions_table:
             answer: Answers
-            encrypted_until_published: Votes are encrypted until you publish the results. The counts appear here then.
+            hidden_until_published: Results are not shown until you publish them.
             percentage: Percentage
             total: Total
             votes: Votes
@@ -350,7 +350,7 @@ en:
             done: Recorded
             failed: Not recorded
             recheck: Check whether my vote was recorded
-            rechecking: Asking the voting network…
+            rechecking: Checking whether your vote was recorded…
             retry: Try the failed questions again
             summary_failed: Some of your votes could not be cast. Nothing was recorded for them, so you can safely try again.
             summary_unconfirmed: We lost contact while sending some of your votes. They may still have been recorded — check before trying again, so you do not send them twice.
