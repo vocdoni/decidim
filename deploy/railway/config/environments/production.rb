@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "active_support/core_ext/integer/time"
 
 Rails.application.configure do
@@ -19,7 +21,7 @@ Rails.application.configure do
   config.public_file_server.headers = { "cache-control" => "public, max-age=#{1.year.to_i}" }
 
   # Enable serving of images, stylesheets, and JavaScripts from an asset server.
-  config.asset_host = ENV['RAILS_ASSET_HOST'] if ENV['RAILS_ASSET_HOST'].present?
+  config.asset_host = ENV["RAILS_ASSET_HOST"] if ENV["RAILS_ASSET_HOST"].present?
 
   # Store uploaded files on the local file system (see config/storage.yml for options).
   config.active_storage.service = Decidim::Env.new("STORAGE_PROVIDER", "local").to_s
@@ -36,19 +38,18 @@ Rails.application.configure do
   config.ssl_options = { redirect: { exclude: ->(request) { request.path == "/up" } } }
 
   # Log to STDOUT with the current request id as a default log tag.
-  config.log_tags = [ :request_id ]
+  config.log_tags = [:request_id]
   config.action_mailer.smtp_settings = {
-    :address        => Decidim::Env.new("SMTP_ADDRESS").to_s,
-    :port           => Decidim::Env.new("SMTP_PORT", 587).to_i,
+    :address => Decidim::Env.new("SMTP_ADDRESS").to_s,
+    :port => Decidim::Env.new("SMTP_PORT", 587).to_i,
     :authentication => Decidim::Env.new("SMTP_AUTHENTICATION", "plain").to_s,
-    :user_name      => Decidim::Env.new("SMTP_USERNAME").to_s,
-    :password       => Decidim::Env.new("SMTP_PASSWORD").to_s,
-    :domain         => Decidim::Env.new("SMTP_DOMAIN").to_s,
+    :user_name => Decidim::Env.new("SMTP_USERNAME").to_s,
+    :password => Decidim::Env.new("SMTP_PASSWORD").to_s,
+    :domain => Decidim::Env.new("SMTP_DOMAIN").to_s,
     :enable_starttls_auto => Decidim::Env.new("SMTP_STARTTLS_AUTO", true).present?,
-    :openssl_verify_mode => 'none'
+    :openssl_verify_mode => "none"
   }
-  config.logger   = ActiveSupport::TaggedLogging.logger(STDOUT)
-
+  config.logger = ActiveSupport::TaggedLogging.logger($stdout)
 
   # Change to "debug" to log everything (including potentially personally-identifiable information!).
   config.log_level = ENV.fetch("RAILS_LOG_LEVEL", "info")
@@ -89,7 +90,7 @@ Rails.application.configure do
   config.active_record.dump_schema_after_migration = false
 
   # Only use :id for inspections in production.
-  config.active_record.attributes_for_inspect = [ :id ]
+  config.active_record.attributes_for_inspect = [:id]
 
   # Enable DNS rebinding protection and other `Host` header attacks.
   # RAILS_HOSTS is a comma-separated list; each host also needs a Decidim
