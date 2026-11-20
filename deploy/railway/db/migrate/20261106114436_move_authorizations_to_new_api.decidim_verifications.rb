@@ -43,7 +43,7 @@ class MoveAuthorizationsToNewApi < ActiveRecord::Migration[5.1]
         next if value.nil?
 
         {
-          "authorization_handler_name" => value["authorization_handler_name"]&.classify&.demodulize&.underscore,
+          "authorization_handler_name" => value["authorization_handler_name"]&.classify&.demodulize&.underscore, # rubocop:disable Style/SafeNavigationChainLength
           "options" => value["options"]
         }
       end

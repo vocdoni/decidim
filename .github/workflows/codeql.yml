@@ -62,6 +62,10 @@ jobs:
       with:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
+        # setup-ruby's bundler-cache installs the gems into vendor/bundle.
+        config: |
+          paths-ignore:
+            - vendor/**
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4.39.3
       with:
